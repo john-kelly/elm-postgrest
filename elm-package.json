@@ -1,5 +1,5 @@
 {
-    "version": "1.0.0",
+    "version": "1.0.1",
     "summary": "REST client library",
     "repository": "https://github.com/john-kelly/elm-rest.git",
     "license": "BSD3",
