@@ -45,12 +45,12 @@ unwrapRestRequest :
     -> { properties : List Property
        , filters : List Filter
        , orders : List OrderBy
-       , limits : List ( Resource schema, Int )
+       , limits : List ( Resource a, Int )
        , offset : Int
        , singular : Bool
        , suppressCount : Bool
        , verb : String
-       , resource : Resource schema
+       , resource : Resource a
        , url : String
        }
 unwrapRestRequest request =
