@@ -10,6 +10,17 @@ import Rest exposing (..)
 import Rest.Adapters exposing (postgRest)
 
 
+session =
+    resource "sessions"
+        { id = property "id"
+        , speaker_id = property "speaker_id"
+        , start_time = property "start_time"
+        , end_time = property "end_time"
+        , location = property "location"
+        , session_type = property "session_type"
+        }
+
+
 speaker =
     resource "speakers"
         { id = property "id"
@@ -22,17 +33,26 @@ speaker =
         }
 
 
-speakersCmd =
-    read "http://postgrest.herokuapp.com/" speaker
-        |> select [ .id, .name ]
-        |> order [ asc .name ]
+sessionsCmd =
+    read "http://postgrest.herokuapp.com/" session
+        |> select
+            [ .id
+            , .start_time
+            , .location
+            , nested speaker []
+            ]
+        |> filter
+            [ .location |> like "%Russia%"
+            , .session_type |> eq "workshop"
+            ]
+        |> order [ asc .start_time ]
         |> send postgRest Http.defaultSettings
         |> Task.perform FetchFail FetchSucceed
 
 
 main =
     App.program
-        { init = ( { speakers = Nothing }, speakersCmd )
+        { init = ( { sessions = Nothing }, sessionsCmd )
         , update = update
         , view = view
         , subscriptions = \_ -> Sub.none
@@ -44,7 +64,7 @@ main =
 
 
 type alias Model =
-    { speakers : Maybe Http.Response
+    { sessions : Maybe Http.Response
     }
 
 
@@ -60,8 +80,8 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        FetchSucceed speakers ->
-            ( { model | speakers = Just speakers }, Cmd.none )
+        FetchSucceed sessions ->
+            ( { model | sessions = Just sessions }, Cmd.none )
 
         FetchFail _ ->
             ( model, Cmd.none )
@@ -72,5 +92,5 @@ update msg model =
 
 
 view : Model -> Html Msg
-view { speakers } =
-    toString speakers |> text
+view { sessions } =
+    toString sessions |> text
