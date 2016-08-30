@@ -36,53 +36,61 @@ module Rest
         , suppressCount
         )
 
+{-| Rest
+# Types
+@docs Resource, Property, RestRequest, Filter, OrderBy
+# Functions
+@docs resource, property, nested, read, send, select, filter, like, eq, gte, gt, lte, lt, neq, ilike, in', notin, is, isnot, contains, not', order, asc, desc, paginate, offset, limit, singular, suppressCount
+-}
+
 import Http
 import String
 import Task
 import Rest.Types as RT exposing (..)
 
 
------------------------------------------
---------------- Re-Export ---------------
------------------------------------------
-
-
+{-| -}
 type alias Resource a =
     RT.Resource a
 
 
+{-| -}
 type alias RestRequest a =
     RT.RestRequest a
 
 
+{-| -}
 type alias Property =
     RT.Property
 
 
+{-| -}
 type alias Filter =
     RT.Filter
 
 
+{-| -}
 type alias OrderBy =
     RT.OrderBy
 
 
 
------------------------------------------
------------- Resource Builder -----------
------------------------------------------
+-- Resource Builder
 
 
+{-| -}
 resource : String -> a -> Resource a
 resource =
     Resource
 
 
+{-| -}
 property : String -> Property
 property =
     SimpleProperty
 
 
+{-| -}
 nested : Resource a -> List (a -> Property) -> b -> Property
 nested resource propertyAccessors =
     let
@@ -98,11 +106,10 @@ nested resource propertyAccessors =
 
 
 
------------------------------------------
------------ RestRequest Builder ---------
------------------------------------------
+-- RestRequest Builder
 
 
+{-| -}
 read : String -> Resource a -> RestRequest a
 read url resource =
     RestRequest
@@ -120,11 +127,10 @@ read url resource =
 
 
 
----------------
--- Selecting --
----------------
+-- Selecting
 
 
+{-| -}
 select : List (a -> Property) -> RestRequest a -> RestRequest a
 select propertyAccessors request =
     let
@@ -143,11 +149,10 @@ select propertyAccessors request =
 
 
 
---------------
--- Filtering -
---------------
+-- Filtering
 
 
+{-| -}
 filter : List (a -> Filter) -> RestRequest a -> RestRequest a
 filter filterAccessors request =
     let
@@ -163,76 +168,91 @@ filter filterAccessors request =
             }
 
 
+{-| -}
 toFilterFn : (Property -> a -> Condition) -> a -> (b -> Property) -> (b -> Filter)
 toFilterFn condValueConstructor val propertyAccessor =
     (\schema -> Filter False (condValueConstructor (propertyAccessor schema) val))
 
 
+{-| -}
 like : String -> (a -> Property) -> (a -> Filter)
 like =
     toFilterFn LikeFilter
 
 
+{-| -}
 eq : String -> (a -> Property) -> (a -> Filter)
 eq =
     toFilterFn EqFilter
 
 
+{-| -}
 gte : String -> (a -> Property) -> (a -> Filter)
 gte =
     toFilterFn GteFilter
 
 
+{-| -}
 gt : String -> (a -> Property) -> (a -> Filter)
 gt =
     toFilterFn GtFilter
 
 
+{-| -}
 lte : String -> (a -> Property) -> (a -> Filter)
 lte =
     toFilterFn LteFilter
 
 
+{-| -}
 lt : String -> (a -> Property) -> (a -> Filter)
 lt =
     toFilterFn LtFilter
 
 
+{-| -}
 neq : String -> (a -> Property) -> (a -> Filter)
 neq =
     not' eq
 
 
+{-| -}
 ilike : String -> (a -> Property) -> (a -> Filter)
 ilike =
     toFilterFn ILikeFilter
 
 
+{-| -}
 in' : List String -> (a -> Property) -> (a -> Filter)
 in' =
     toFilterFn InFilter
 
 
+{-| -}
 notin : List String -> (a -> Property) -> (a -> Filter)
 notin =
     not' in'
 
 
+{-| -}
 is : String -> (a -> Property) -> (a -> Filter)
 is =
     toFilterFn IsFilter
 
 
+{-| -}
 isnot : String -> (a -> Property) -> (a -> Filter)
 isnot =
     not' is
 
 
+{-| -}
 contains : String -> (a -> Property) -> (a -> Filter)
 contains =
     toFilterFn ContainsFilter
 
 
+{-| -}
 not' : (a -> (b -> Property) -> (b -> Filter)) -> a -> (b -> Property) -> (b -> Filter)
 not' filterAccessorConstructor val propertyAccessor =
     let
@@ -247,11 +267,10 @@ not' filterAccessorConstructor val propertyAccessor =
 
 
 
---------------
--- Ordering --
---------------
+-- Ordering
 
 
+{-| -}
 order : List (a -> OrderBy) -> RestRequest a -> RestRequest a
 order orderByAccessors request =
     let
@@ -267,22 +286,23 @@ order orderByAccessors request =
             }
 
 
+{-| -}
 asc : (a -> Property) -> (a -> OrderBy)
 asc propertyAccessor =
     (\schema -> Ascending (propertyAccessor schema))
 
 
+{-| -}
 desc : (a -> Property) -> (a -> OrderBy)
 desc propertyAccessor =
     (\schema -> Descending (propertyAccessor schema))
 
 
 
------------------------------------------
---------- Count and Pagination ----------
------------------------------------------
+-- Count and Pagination
 
 
+{-| -}
 offset : Int -> RestRequest a -> RestRequest a
 offset offset' request =
     let
@@ -292,6 +312,7 @@ offset offset' request =
         RestRequest { unwrapped | offset = offset' }
 
 
+{-| -}
 limit : List ( Resource a, Int ) -> RestRequest a -> RestRequest a
 limit limits request =
     let
@@ -301,6 +322,7 @@ limit limits request =
         RestRequest { unwrapped | limits = limits }
 
 
+{-| -}
 paginate : Int -> Int -> RestRequest a -> RestRequest a
 paginate pageSize pageNumber request =
     let
@@ -314,6 +336,7 @@ paginate pageSize pageNumber request =
             }
 
 
+{-| -}
 singular : RestRequest a -> RestRequest a
 singular request =
     let
@@ -323,6 +346,7 @@ singular request =
         RestRequest { unwrapped | singular = True }
 
 
+{-| -}
 suppressCount : RestRequest a -> RestRequest a
 suppressCount request =
     let
@@ -333,11 +357,10 @@ suppressCount request =
 
 
 
------------------------------------------
-------- RestRequest Task Builder --------
------------------------------------------
+-- RestRequest Task Builder
 
 
+{-| -}
 send : (RestRequest a -> Http.Request) -> Http.Settings -> RestRequest a -> Task.Task Http.RawError Http.Response
 send adapter settings restRequest =
     restRequest

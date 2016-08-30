@@ -1,6 +1,14 @@
 module Rest.Types exposing (..)
 
+{-| Rest.Types
+# Types
+@docs Resource, Property, RestRequest, Condition, Filter, OrderBy
+# Functions
+@docs unwrapResource, unwrapRestRequest
+-}
 
+
+{-| -}
 type Resource schema
     = Resource String schema
 
@@ -13,6 +21,7 @@ unwrapResource resource =
             ( name, schema )
 
 
+{-| -}
 type RestRequest schema
     = RestRequest
         { properties : List Property
@@ -28,7 +37,7 @@ type RestRequest schema
         }
 
 
-{-| private helper to assist with opaque RestRequest type
+{-| helper to assist with opaque RestRequest type
 -}
 unwrapRestRequest request =
     case request of
@@ -36,27 +45,19 @@ unwrapRestRequest request =
             record
 
 
-updateRestRequest update request =
-    let
-        unwrapped =
-            unwrapRestRequest request
-
-        updated =
-            update unwrapped
-    in
-        RestRequest updated
-
-
+{-| -}
 type OrderBy
     = Ascending Property
     | Descending Property
 
 
+{-| -}
 type Property
     = SimpleProperty String
     | NestedResource String (List Property)
 
 
+{-| -}
 type
     Condition
     -- TODO support generic types https://github.com/elm-lang/core/issues/657
@@ -72,5 +73,6 @@ type
     | ContainsFilter Property String
 
 
+{-| -}
 type Filter
     = Filter Bool Condition

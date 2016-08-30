@@ -1,10 +1,16 @@
 module Rest.Adapters exposing (postgRest)
 
+{-| Rest.Adapters
+# Adapters
+@docs postgRest
+-}
+
 import Rest.Types exposing (..)
 import Http
 import String
 
 
+{-| -}
 postgRest : RestRequest a -> Http.Request
 postgRest request =
     let
@@ -192,11 +198,7 @@ limitsToKeyValues resource limits =
 
 
 
------------------------------------------
------------------------------------------
----------- General Helpers --------------
------------------------------------------
------------------------------------------
+-- General Helpers
 
 
 join : String -> List String -> String
