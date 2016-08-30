@@ -15,7 +15,7 @@ type Resource schema
 
 {-| helper to assist with opaque Resource type
 -}
-unwrapResource : Resource a -> ( String, a )
+unwrapResource : Resource schema -> ( String, schema )
 unwrapResource resource =
     case resource of
         Resource name schema ->
@@ -41,16 +41,16 @@ type RestRequest schema
 {-| helper to assist with opaque RestRequest type
 -}
 unwrapRestRequest :
-    RestRequest a
+    RestRequest schema
     -> { properties : List Property
        , filters : List Filter
        , orders : List OrderBy
-       , limits : List ( Resource a, Int )
+       , limits : List ( Resource schema, Int )
        , offset : Int
        , singular : Bool
        , suppressCount : Bool
        , verb : String
-       , resource : Resource a
+       , resource : Resource schema
        , url : String
        }
 unwrapRestRequest request =

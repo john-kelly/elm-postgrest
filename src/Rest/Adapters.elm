@@ -11,7 +11,7 @@ import String
 
 
 {-| -}
-postgRest : RestRequest a -> Http.Request
+postgRest : RestRequest schema -> Http.Request
 postgRest request =
     let
         { url, properties, filters, orders, limits, offset, singular, suppressCount, verb, resource } =
@@ -177,7 +177,7 @@ offsetToKeyValue offset =
     [ ( "offset", toString offset ) ]
 
 
-limitsToKeyValues : Resource a -> List ( Resource b, Int ) -> List ( String, String )
+limitsToKeyValues : Resource schema1 -> List ( Resource schema2, Int ) -> List ( String, String )
 limitsToKeyValues resource limits =
     let
         ( resourceName, _ ) =

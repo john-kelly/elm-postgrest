@@ -33,7 +33,7 @@ module Rest
         , offset
         , limit
         , singular
-        , suppressCount
+        , count
         )
 
 {-| Rest
@@ -50,13 +50,13 @@ import Rest.Types as RT exposing (..)
 
 
 {-| -}
-type alias Resource a =
-    RT.Resource a
+type alias Resource schema =
+    RT.Resource schema
 
 
 {-| -}
-type alias RestRequest a =
-    RT.RestRequest a
+type alias RestRequest schema =
+    RT.RestRequest schema
 
 
 {-| -}
@@ -79,7 +79,7 @@ type alias OrderBy =
 
 
 {-| -}
-resource : String -> a -> Resource a
+resource : String -> schema -> Resource schema
 resource =
     Resource
 
@@ -91,7 +91,7 @@ property =
 
 
 {-| -}
-nested : Resource a -> List (a -> Property) -> b -> Property
+nested : Resource schema1 -> List (schema1 -> Property) -> schema2 -> Property
 nested resource propertyAccessors =
     let
         ( resourceName, resourceSchema ) =
@@ -110,7 +110,7 @@ nested resource propertyAccessors =
 
 
 {-| -}
-read : String -> Resource a -> RestRequest a
+read : String -> Resource schema -> RestRequest schema
 read url resource =
     RestRequest
         { properties = []
@@ -119,7 +119,7 @@ read url resource =
         , limits = []
         , offset = 0
         , singular = False
-        , suppressCount = False
+        , suppressCount = True
         , verb = "GET"
         , resource = resource
         , url = url
@@ -131,7 +131,7 @@ read url resource =
 
 
 {-| -}
-select : List (a -> Property) -> RestRequest a -> RestRequest a
+select : List (schema -> Property) -> RestRequest schema -> RestRequest schema
 select propertyAccessors request =
     let
         unwrappedRequest =
@@ -142,18 +142,18 @@ select propertyAccessors request =
     in
         RestRequest
             { unwrappedRequest
-              -- TODO: what is the better api? adding or replacing?
-              -- request.properties ++ List.map (\fn -> fn request.resource.schema) propertyAccessors
-                | properties = List.map (\fn -> fn resourceSchema) propertyAccessors
+              -- NOTE: we append new props, is this the best api?
+                | properties = unwrappedRequest.properties ++ List.map (\fn -> fn resourceSchema) propertyAccessors
             }
 
 
 
 -- Filtering
+-- TODO: take a look here for api example: https://docs.djangoproject.com/en/1.10/ref/models/querysets/#field-lookups
 
 
 {-| -}
-filter : List (a -> Filter) -> RestRequest a -> RestRequest a
+filter : List (schema -> Filter) -> RestRequest schema -> RestRequest schema
 filter filterAccessors request =
     let
         unwrappedRequest =
@@ -164,97 +164,105 @@ filter filterAccessors request =
     in
         RestRequest
             { unwrappedRequest
-                | filters = List.map (\fn -> fn resourceSchema) filterAccessors
+                | filters = unwrappedRequest.filters ++ List.map (\fn -> fn resourceSchema) filterAccessors
             }
 
 
 {-| -}
-toFilterFn : (Property -> a -> Condition) -> a -> (b -> Property) -> (b -> Filter)
+toFilterFn : (Property -> schema1 -> Condition) -> schema1 -> (schema2 -> Property) -> (schema2 -> Filter)
 toFilterFn condValueConstructor val propertyAccessor =
     (\schema -> Filter False (condValueConstructor (propertyAccessor schema) val))
 
 
 {-| -}
-like : String -> (a -> Property) -> (a -> Filter)
+like : String -> (schema -> Property) -> (schema -> Filter)
 like =
     toFilterFn LikeFilter
 
 
 {-| -}
-eq : String -> (a -> Property) -> (a -> Filter)
+eq : String -> (schema -> Property) -> (schema -> Filter)
 eq =
     toFilterFn EqFilter
 
 
 {-| -}
-gte : String -> (a -> Property) -> (a -> Filter)
+gte : String -> (schema -> Property) -> (schema -> Filter)
 gte =
     toFilterFn GteFilter
 
 
 {-| -}
-gt : String -> (a -> Property) -> (a -> Filter)
+gt : String -> (schema -> Property) -> (schema -> Filter)
 gt =
     toFilterFn GtFilter
 
 
 {-| -}
-lte : String -> (a -> Property) -> (a -> Filter)
+lte : String -> (schema -> Property) -> (schema -> Filter)
 lte =
     toFilterFn LteFilter
 
 
 {-| -}
-lt : String -> (a -> Property) -> (a -> Filter)
+lt : String -> (schema -> Property) -> (schema -> Filter)
 lt =
     toFilterFn LtFilter
 
 
 {-| -}
-neq : String -> (a -> Property) -> (a -> Filter)
+neq : String -> (schema -> Property) -> (schema -> Filter)
 neq =
+    -- TODO: DEPRECATE in favor of smaller base api.
     not' eq
 
 
 {-| -}
-ilike : String -> (a -> Property) -> (a -> Filter)
+ilike : String -> (schema -> Property) -> (schema -> Filter)
 ilike =
+    -- TODO: What is the best name for this? Too low level?
     toFilterFn ILikeFilter
 
 
 {-| -}
-in' : List String -> (a -> Property) -> (a -> Filter)
+in' : List String -> (schema -> Property) -> (schema -> Filter)
 in' =
+    -- TODO: What is the best name for this?
     toFilterFn InFilter
 
 
 {-| -}
-notin : List String -> (a -> Property) -> (a -> Filter)
+notin : List String -> (schema -> Property) -> (schema -> Filter)
 notin =
+    -- TODO: DEPRECATE
     not' in'
 
 
 {-| -}
-is : String -> (a -> Property) -> (a -> Filter)
+is : String -> (schema -> Property) -> (schema -> Filter)
 is =
     toFilterFn IsFilter
 
 
 {-| -}
-isnot : String -> (a -> Property) -> (a -> Filter)
+isnot : String -> (schema -> Property) -> (schema -> Filter)
 isnot =
+    -- TODO: DEPRECATE
     not' is
 
 
 {-| -}
-contains : String -> (a -> Property) -> (a -> Filter)
+contains : String -> (schema -> Property) -> (schema -> Filter)
 contains =
+    -- TODO: Is this the right name? I don't think so.
+    -- https://docs.djangoproject.com/en/1.10/ref/models/querysets/#contains
     toFilterFn ContainsFilter
 
 
 {-| -}
-not' : (a -> (b -> Property) -> (b -> Filter)) -> a -> (b -> Property) -> (b -> Filter)
+not' : (a -> (schema -> Property) -> (schema -> Filter)) -> a -> (schema -> Property) -> (schema -> Filter)
 not' filterAccessorConstructor val propertyAccessor =
+    -- TODO: What is the best name for this?
     let
         filterAccessor =
             filterAccessorConstructor val propertyAccessor
@@ -271,29 +279,29 @@ not' filterAccessorConstructor val propertyAccessor =
 
 
 {-| -}
-order : List (a -> OrderBy) -> RestRequest a -> RestRequest a
+order : List (schema -> OrderBy) -> RestRequest schema -> RestRequest schema
 order orderByAccessors request =
     let
         unwrappedRequest =
             unwrapRestRequest request
 
-        ( _, resourceSchema ) =
+        ( _, schema ) =
             unwrapResource unwrappedRequest.resource
     in
         RestRequest
             { unwrappedRequest
-                | orders = List.map (\fn -> fn resourceSchema) orderByAccessors
+                | orders = unwrappedRequest.orders ++ List.map (\fn -> fn schema) orderByAccessors
             }
 
 
 {-| -}
-asc : (a -> Property) -> (a -> OrderBy)
+asc : (schema -> Property) -> (schema -> OrderBy)
 asc propertyAccessor =
     (\schema -> Ascending (propertyAccessor schema))
 
 
 {-| -}
-desc : (a -> Property) -> (a -> OrderBy)
+desc : (schema -> Property) -> (schema -> OrderBy)
 desc propertyAccessor =
     (\schema -> Descending (propertyAccessor schema))
 
@@ -303,8 +311,9 @@ desc propertyAccessor =
 
 
 {-| -}
-offset : Int -> RestRequest a -> RestRequest a
+offset : Int -> RestRequest schema -> RestRequest schema
 offset offset' request =
+    -- TODO: setting?
     let
         unwrapped =
             unwrapRestRequest request
@@ -313,17 +322,17 @@ offset offset' request =
 
 
 {-| -}
-limit : List ( Resource a, Int ) -> RestRequest a -> RestRequest a
+limit : List ( Resource schema, Int ) -> RestRequest schema -> RestRequest schema
 limit limits request =
     let
         unwrapped =
             unwrapRestRequest request
     in
-        RestRequest { unwrapped | limits = limits }
+        RestRequest { unwrapped | limits = unwrapped.limits ++ limits }
 
 
 {-| -}
-paginate : Int -> Int -> RestRequest a -> RestRequest a
+paginate : Int -> Int -> RestRequest schema -> RestRequest schema
 paginate pageSize pageNumber request =
     let
         unwrapped =
@@ -331,13 +340,14 @@ paginate pageSize pageNumber request =
     in
         RestRequest
             { unwrapped
+              -- TODO: should this append?
                 | limits = [ ( unwrapped.resource, pageSize ) ]
                 , offset = (pageNumber - 1) * pageSize
             }
 
 
 {-| -}
-singular : RestRequest a -> RestRequest a
+singular : RestRequest schema -> RestRequest schema
 singular request =
     let
         unwrapped =
@@ -347,13 +357,18 @@ singular request =
 
 
 {-| -}
-suppressCount : RestRequest a -> RestRequest a
-suppressCount request =
+count : RestRequest schema -> RestRequest schema
+count request =
+    -- NOTE: maybe this belongs as a settings? it's nice to have it as a fn,
+    -- but it allows for a potentially confusing user interaction of calling
+    -- count more than once. what other functions may belong as settings?
+    -- this might be a perfect canidate for a Rest.Settings! the adapter can go
+    -- in there too, and dev mode options, etc.
     let
         unwrapped =
             unwrapRestRequest request
     in
-        RestRequest { unwrapped | suppressCount = True }
+        RestRequest { unwrapped | suppressCount = False }
 
 
 
@@ -361,7 +376,7 @@ suppressCount request =
 
 
 {-| -}
-send : (RestRequest a -> Http.Request) -> Http.Settings -> RestRequest a -> Task.Task Http.RawError Http.Response
+send : (RestRequest schema -> Http.Request) -> Http.Settings -> RestRequest schema -> Task.Task Http.RawError Http.Response
 send adapter settings restRequest =
     restRequest
         |> adapter
