@@ -18,7 +18,7 @@ module Rest.Infix
         , (!@@)
         )
 
-import PostgRest
+import Rest
     exposing
         ( Property
         , Filter
