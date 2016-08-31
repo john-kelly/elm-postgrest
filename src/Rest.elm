@@ -6,6 +6,7 @@ module Rest exposing (deprecated)
 -}
 
 
+{-| -}
 deprecated : Int
 deprecated =
     1
