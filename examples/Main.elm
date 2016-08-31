@@ -6,30 +6,30 @@ import Html exposing (Html, text)
 import Html.App as App
 import Http
 import Task
-import Rest exposing (..)
-import Rest.Adapters exposing (postgRest)
+import Query exposing (..)
+import Query.Adapters exposing (postgRest)
 
 
 session =
-    resource "sessions"
-        { id = property "id"
-        , speaker_id = property "speaker_id"
-        , start_time = property "start_time"
-        , end_time = property "end_time"
-        , location = property "location"
-        , session_type = property "session_type"
+    schema "sessions"
+        { id = field "id"
+        , speaker_id = field "speaker_id"
+        , start_time = field "start_time"
+        , end_time = field "end_time"
+        , location = field "location"
+        , session_type = field "session_type"
         }
 
 
 speaker =
-    resource "speakers"
-        { id = property "id"
-        , name = property "name"
-        , lineup_order = property "lineup_order"
-        , twitter = property "twitter"
-        , avatar_url = property "avatar_url"
-        , bio = property "bio"
-        , featured = property "featured"
+    schema "speakers"
+        { id = field "id"
+        , name = field "name"
+        , lineup_order = field "lineup_order"
+        , twitter = field "twitter"
+        , avatar_url = field "avatar_url"
+        , bio = field "bio"
+        , featured = field "featured"
         }
 
 

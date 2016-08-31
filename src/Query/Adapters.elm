@@ -1,24 +1,24 @@
-module Rest.Adapters exposing (postgRest)
+module Query.Adapters exposing (postgRest)
 
-{-| Rest.Adapters
+{-| Query.Adapters
 # Adapters
 @docs postgRest
 -}
 
-import Rest.Types exposing (..)
+import Query.Types exposing (..)
 import Http
 import String
 
 
 {-| -}
-postgRest : RestRequest schema -> Http.Request
-postgRest request =
+postgRest : Query shape -> Http.Request
+postgRest query =
     let
-        { url, properties, filters, orders, limits, offset, singular, suppressCount, verb, resource } =
-            unwrapRestRequest request
+        { url, fields, filters, orders, limits, offset, singular, suppressCount, verb, schema } =
+            unwrapQuery query
 
-        ( resourceName, _ ) =
-            unwrapResource resource
+        ( schemaName, _ ) =
+            unwrapSchema schema
 
         trailingSlashUrl =
             if String.right 1 url == "/" then
@@ -26,15 +26,15 @@ postgRest request =
             else
                 url ++ "/"
 
-        requestUrl =
+        queryUrl =
             [ ordersToKeyValue orders
-            , propertiesToKeyValue properties
+            , fieldsToKeyValue fields
             , filtersToKeyValues filters
             , offsetToKeyValue offset
-            , limitsToKeyValues resource limits
+            , limitsToKeyValues schema limits
             ]
                 |> List.foldl (++) []
-                |> Http.url (trailingSlashUrl ++ resourceName)
+                |> Http.url (trailingSlashUrl ++ schemaName)
 
         pluralityHeader =
             if singular then
@@ -53,77 +53,77 @@ postgRest request =
     in
         { verb = verb
         , headers = headers
-        , url = requestUrl
+        , url = queryUrl
         , body = Http.empty
         }
 
 
-propertiesToKeyValue : List Property -> List ( String, String )
-propertiesToKeyValue properties =
+fieldsToKeyValue : List Field -> List ( String, String )
+fieldsToKeyValue fields =
     let
-        propertyToString : Property -> String
-        propertyToString property =
-            case property of
-                SimpleProperty name ->
+        fieldToString : Field -> String
+        fieldToString field =
+            case field of
+                SimpleField name ->
                     name
 
-                NestedResource name nestedProperties ->
-                    name ++ "{" ++ propertiesToString nestedProperties ++ "}"
+                NestedField name nestedFields ->
+                    name ++ "{" ++ fieldsToString nestedFields ++ "}"
 
-        propertiesToString : List Property -> String
-        propertiesToString properties =
-            case properties of
+        fieldsToString : List Field -> String
+        fieldsToString fields =
+            case fields of
                 [] ->
                     "*"
 
                 _ ->
-                    properties
-                        |> List.map propertyToString
+                    fields
+                        |> List.map fieldToString
                         |> join ","
     in
-        case properties of
+        case fields of
             [] ->
                 []
 
             _ ->
-                [ ( "select", propertiesToString properties ) ]
+                [ ( "select", fieldsToString fields ) ]
 
 
 filtersToKeyValues : List Filter -> List ( String, String )
 filtersToKeyValues filters =
     let
-        -- `Maybe` b/c we should not be able to filter on a NestedProperty
+        -- `Maybe` b/c we should not be able to filter on a NestedField
         condToKeyValue : Condition -> Maybe ( String, String )
         condToKeyValue cond =
             case cond of
-                LikeFilter (SimpleProperty name) str ->
+                Like (SimpleField name) str ->
                     Just ( name, "like." ++ str )
 
-                EqFilter (SimpleProperty name) str ->
+                Eq (SimpleField name) str ->
                     Just ( name, "eq." ++ str )
 
-                GteFilter (SimpleProperty name) str ->
+                Gte (SimpleField name) str ->
                     Just ( name, "gte." ++ str )
 
-                GtFilter (SimpleProperty name) str ->
+                Gt (SimpleField name) str ->
                     Just ( name, "gt." ++ str )
 
-                LteFilter (SimpleProperty name) str ->
+                Lte (SimpleField name) str ->
                     Just ( name, "lte." ++ str )
 
-                LtFilter (SimpleProperty name) str ->
+                Lt (SimpleField name) str ->
                     Just ( name, "lt." ++ str )
 
-                ILikeFilter (SimpleProperty name) str ->
+                ILike (SimpleField name) str ->
                     Just ( name, "ilike." ++ str )
 
-                InFilter (SimpleProperty name) list ->
+                In (SimpleField name) list ->
                     Just ( name, "in." ++ join "," list )
 
-                IsFilter (SimpleProperty name) str ->
+                Is (SimpleField name) str ->
                     Just ( name, "is." ++ str )
 
-                ContainsFilter (SimpleProperty name) str ->
+                Contains (SimpleField name) str ->
                     Just ( name, "@@." ++ str )
 
                 _ ->
@@ -145,14 +145,14 @@ filtersToKeyValues filters =
 ordersToKeyValue : List OrderBy -> List ( String, String )
 ordersToKeyValue orders =
     let
-        -- `Maybe` b/c we should not be able to filter on a NestedProperty
+        -- `Maybe` b/c we should not be able to filter on a NestedField
         orderToString : OrderBy -> Maybe String
         orderToString order =
             case order of
-                Ascending (SimpleProperty name) ->
+                Ascending (SimpleField name) ->
                     Just (name ++ ".asc")
 
-                Descending (SimpleProperty name) ->
+                Descending (SimpleField name) ->
                     Just (name ++ ".desc")
 
                 _ ->
@@ -177,18 +177,18 @@ offsetToKeyValue offset =
     [ ( "offset", toString offset ) ]
 
 
-limitsToKeyValues : Resource schema1 -> List ( Resource schema2, Int ) -> List ( String, String )
-limitsToKeyValues resource limits =
+limitsToKeyValues : Schema shape1 -> List ( Schema shape2, Int ) -> List ( String, String )
+limitsToKeyValues schema limits =
     let
-        ( resourceName, _ ) =
-            unwrapResource resource
+        ( schemaName, _ ) =
+            unwrapSchema schema
 
-        limitToKeyValue ( offsetResource, offset ) =
+        limitToKeyValue ( offsetSchema, offset ) =
             let
-                ( offsetResourceName, _ ) =
-                    unwrapResource offsetResource
+                ( offsetSchemaName, _ ) =
+                    unwrapSchema offsetSchema
             in
-                if resourceName == offsetResourceName then
+                if schemaName == offsetSchemaName then
                     Just ( "limit", toString offset )
                 else
                     -- TODO This does not account for nested limits.
