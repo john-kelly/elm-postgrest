@@ -36,7 +36,7 @@ module Rest
         , count
         )
 
-{-| Rest
+{-| DEPRECATED: Renamed to http://package.elm-lang.org/john-kelly/query
 # Types
 @docs Resource, Property, RestRequest, Filter, OrderBy
 # Functions
