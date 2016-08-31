@@ -1,13 +1,15 @@
 {
-    "version": "3.0.0",
-    "summary": "DEPRECATED: Renamed to http://package.elm-lang.org/john-kelly/elm-query",
-    "repository": "https://github.com/john-kelly/elm-rest.git",
+    "version": "1.0.0",
+    "summary": "DSL for building complex HTTP queries in Elm!",
+    "repository": "https://github.com/john-kelly/elm-query.git",
     "license": "BSD3",
     "source-directories": [
         "src"
     ],
     "exposed-modules": [
-        "Rest"
+        "Query",
+        "Query.Adapters",
+        "Query.Types"
     ],
     "dependencies": {
         "elm-lang/core": "4.0.5 <= v < 5.0.0",

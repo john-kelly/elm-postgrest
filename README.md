@@ -1,1 +1,1 @@
-DEPRECATED: Renamed to http://package.elm-lang.org/john-kelly/elm-query
+DSL for building complex HTTP queries in Elm!
