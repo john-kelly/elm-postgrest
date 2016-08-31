@@ -116,8 +116,8 @@ read url schema =
         { fields = []
         , filters = []
         , orders = []
-        , limits = []
-        , offset = 0
+        , limit = Nothing
+        , offset = Nothing
         , singular = False
         , suppressCount = True
         , verb = "GET"
@@ -318,17 +318,17 @@ offset offset' query =
         unwrapped =
             unwrapQuery query
     in
-        Query { unwrapped | offset = offset' }
+        Query { unwrapped | offset = Just offset' }
 
 
 {-| -}
-limit : List ( Schema shape, Int ) -> Query shape -> Query shape
-limit limits query =
+limit : Int -> Query shape -> Query shape
+limit limit' query =
     let
         unwrapped =
             unwrapQuery query
     in
-        Query { unwrapped | limits = unwrapped.limits ++ limits }
+        Query { unwrapped | limit = Just limit' }
 
 
 {-| -}
@@ -341,8 +341,8 @@ paginate pageSize pageNumber query =
         Query
             { unwrapped
               -- TODO: should this append?
-                | limits = [ ( unwrapped.schema, pageSize ) ]
-                , offset = (pageNumber - 1) * pageSize
+                | limit = Just pageSize
+                , offset = Just <| (pageNumber - 1) * pageSize
             }
 
 

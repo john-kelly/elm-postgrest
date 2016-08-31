@@ -14,7 +14,7 @@ import String
 postgRest : Query shape -> Http.Request
 postgRest query =
     let
-        { url, fields, filters, orders, limits, offset, singular, suppressCount, verb, schema } =
+        { url, fields, filters, orders, limit, offset, singular, suppressCount, verb, schema } =
             unwrapQuery query
 
         ( schemaName, _ ) =
@@ -31,7 +31,7 @@ postgRest query =
             , fieldsToKeyValue fields
             , filtersToKeyValues filters
             , offsetToKeyValue offset
-            , limitsToKeyValues schema limits
+            , limitToKeyValues limit
             ]
                 |> List.foldl (++) []
                 |> Http.url (trailingSlashUrl ++ schemaName)
@@ -172,29 +172,24 @@ ordersToKeyValue orders =
                 [ ( "order", ordersToString orders ) ]
 
 
-offsetToKeyValue : Int -> List ( String, String )
-offsetToKeyValue offset =
-    [ ( "offset", toString offset ) ]
+offsetToKeyValue : Maybe Int -> List ( String, String )
+offsetToKeyValue maybeOffset =
+    case maybeOffset of
+        Nothing ->
+            []
+
+        Just offset ->
+            [ ( "offset", toString offset ) ]
 
 
-limitsToKeyValues : Schema shape1 -> List ( Schema shape2, Int ) -> List ( String, String )
-limitsToKeyValues schema limits =
-    let
-        ( schemaName, _ ) =
-            unwrapSchema schema
+limitToKeyValues : Maybe Int -> List ( String, String )
+limitToKeyValues maybeLimit =
+    case maybeLimit of
+        Nothing ->
+            []
 
-        limitToKeyValue ( offsetSchema, offset ) =
-            let
-                ( offsetSchemaName, _ ) =
-                    unwrapSchema offsetSchema
-            in
-                if schemaName == offsetSchemaName then
-                    Just ( "limit", toString offset )
-                else
-                    -- TODO This does not account for nested limits.
-                    Nothing
-    in
-        List.filterMap limitToKeyValue limits
+        Just limit ->
+            [ ( "limit", toString limit ) ]
 
 
 

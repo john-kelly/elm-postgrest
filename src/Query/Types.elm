@@ -28,8 +28,8 @@ type Query shape
         { fields : List Field
         , filters : List Filter
         , orders : List OrderBy
-        , limits : List ( Schema shape, Int )
-        , offset : Int
+        , limit : Maybe Int
+        , offset : Maybe Int
         , singular : Bool
         , suppressCount : Bool
         , verb : String
@@ -45,8 +45,8 @@ unwrapQuery :
     -> { fields : List Field
        , filters : List Filter
        , orders : List OrderBy
-       , limits : List ( Schema shape, Int )
-       , offset : Int
+       , limit : Maybe Int
+       , offset : Maybe Int
        , singular : Bool
        , suppressCount : Bool
        , verb : String
