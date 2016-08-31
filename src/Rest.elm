@@ -40,7 +40,7 @@ module Rest
 # Types
 @docs Resource, Property, RestRequest, Filter, OrderBy
 # Functions
-@docs resource, property, nested, read, send, select, filter, like, eq, gte, gt, lte, lt, neq, ilike, in', notin, is, isnot, contains, not', order, asc, desc, paginate, offset, limit, singular, suppressCount
+@docs resource, property, nested, read, send, select, filter, like, eq, gte, gt, lte, lt, neq, ilike, in', notin, is, isnot, contains, not', order, asc, desc, paginate, offset, limit, singular, count
 -}
 
 import Http
