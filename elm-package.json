@@ -1,6 +1,6 @@
 {
     "version": "1.0.1",
-    "summary": "REST client library",
+    "summary": "DEPRECATED: Renamed to http://package.elm-lang.org/john-kelly/query",
     "repository": "https://github.com/john-kelly/elm-rest.git",
     "license": "BSD3",
     "source-directories": [
