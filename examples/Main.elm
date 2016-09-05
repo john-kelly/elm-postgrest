@@ -7,7 +7,6 @@ import Html.App as App
 import Http
 import Task
 import Query exposing (..)
-import Query.Adapters exposing (postgRest)
 
 
 session =
@@ -19,6 +18,10 @@ session =
         , location = field "location"
         , session_type = field "session_type"
         }
+
+
+
+-- List
 
 
 speaker =
@@ -33,26 +36,29 @@ speaker =
         }
 
 
-sessionsCmd =
-    read "http://postgrest.herokuapp.com/" session
+speakerQuery =
+    query speaker
+        |> select [ .id, .bio ]
+        |> filter [ .id |> gte 10 ]
+        |> order [ asc .name ]
+
+
+sessionQuery =
+    query session
         |> select
             [ .id
+            , .speaker_id
             , .start_time
-            , .location
-            , nested speaker []
+            , (.) speakerQuery
             ]
-        |> filter
-            [ .location |> like "%Russia%"
-            , .session_type |> eq "workshop"
-            ]
+        |> filter [ .location |> not' like "%Russia%" ]
         |> order [ asc .start_time ]
-        |> send postgRest Http.defaultSettings
-        |> Task.perform FetchFail FetchSucceed
+        |> postgRest "http://postgrest.herokuapp.com/" defaultSettings
 
 
 main =
     App.program
-        { init = ( { sessions = Nothing }, sessionsCmd )
+        { init = ( { sessions = Nothing }, Cmd.none )
         , update = update
         , view = view
         , subscriptions = \_ -> Sub.none
@@ -93,4 +99,4 @@ update msg model =
 
 view : Model -> Html Msg
 view { sessions } =
-    toString sessions |> text
+    toString sessionQuery |> text

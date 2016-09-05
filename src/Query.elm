@@ -1,383 +1,481 @@
-module Query
-    exposing
-        ( Schema
-        , Field
-        , schema
-        , field
-        , nested
-        , Query
-        , read
-        , send
-        , select
-        , Filter
-        , filter
-        , like
-        , eq
-        , gte
-        , gt
-        , lte
-        , lt
-        , neq
-        , ilike
-        , in'
-        , notin
-        , is
-        , isnot
-        , contains
-        , not'
-        , OrderBy
-        , order
-        , asc
-        , desc
-        , paginate
-        , offset
-        , limit
-        , singular
-        , count
-        )
-
-{-| DEPRECATED: Renamed to http://package.elm-lang.org/john-kelly/query
-# Types
-@docs Schema, Field, Query, Filter, OrderBy
-# Functions
-@docs schema, field, nested, read, send, select, filter, like, eq, gte, gt, lte, lt, neq, ilike, in', notin, is, isnot, contains, not', order, asc, desc, paginate, offset, limit, singular, count
--}
+module Query exposing (..)
 
 import Http
+import Json.Decode as Decode
 import String
 import Task
-import Query.Types as QT exposing (..)
+
+
+{-| thanks lukewestby
+https://github.com/elm-lang/core/issues/657
+-}
+coerceToString : a -> String
+coerceToString value =
+    let
+        stringValue =
+            toString value
+    in
+        stringValue
+            |> Decode.decodeString Decode.string
+            |> Result.withDefault stringValue
 
 
 {-| -}
-type alias Schema shape =
-    QT.Schema shape
+type Schema s
+    = Schema String s
+
+
+type
+    Query s
+    -- | Mutation can go here! or maybe CRUD!!!
+    = Query String s QueryParams
+
+
+unwrapQuery : Query s -> ( String, s, QueryParams )
+unwrapQuery query =
+    case query of
+        Query name shape params ->
+            ( name, shape, params )
+
+
+{-|
+-}
+type alias Settings =
+    { count : Bool
+    , singular : Bool
+    , limit : Maybe Int
+    , offset : Maybe Int
+    }
+
+
+defaultSettings : Settings
+defaultSettings =
+    { count = False
+    , singular = False
+    , limit = Nothing
+    , offset = Nothing
+    }
+
+
+type alias QueryParams =
+    { select :
+        List Field
+        -- should represent this with Maybe List so that we have a
+        -- difference between no selection and all selection
+    , order : List OrderBy
+    , filter : List Filter
+    }
 
 
 {-| -}
-type alias Query shape =
-    QT.Query shape
+type Field
+    = Simple String
+    | Nested String QueryParams
 
 
 {-| -}
-type alias Field shape =
-    QT.Field shape
+type OrderBy
+    = Asc Field
+    | Desc Field
 
 
 {-| -}
-type alias Filter shape =
-    QT.Filter shape
+type Condition
+    = Like String
+    | ILike String
+    | Eq String
+    | Gte String
+    | Gt String
+    | Lte String
+    | Lt String
+    | In (List String)
+    | Is String
+
+
+{-| Comment/Blog about why String vs Field. By
+Just having String. We simply move the weird issue of having to worry about
+the possible Nested case to another location. This is the same realization that i came to
+when i decided to just have shape and string in Query instead of including the
+entire Schema type. however it did not make sense to do it in this case because
+being able to convert nested into a Nothing later on just made more sense.
+i wonder what this is called. this is very interesting.
+-}
+type Filter
+    = Filter Bool Condition Field
 
 
 {-| -}
-type alias OrderBy shape =
-    QT.OrderBy shape
-
-
-
--- Schema Builder
-
-
-{-| -}
-schema : String -> shape -> Schema shape
+schema : String -> s -> Schema s
 schema =
     Schema
 
 
 {-| -}
-field : String -> Field shape
+unwrapSchema : Schema s -> ( String, s )
+unwrapSchema schema =
+    case schema of
+        Schema name shape ->
+            ( name, shape )
+
+
+{-| -}
+field : String -> Field
 field =
-    SimpleField
+    Simple
 
 
-{-| -}
-nested : Schema shape1 -> List (shape1 -> Field shape1) -> shape2 -> Field shape1
-nested schema fieldAccessors =
+query : Schema s -> Query s
+query schema =
     let
-        ( schemaName, schemaShape ) =
+        ( name, shape ) =
             unwrapSchema schema
-
-        nestedField =
-            fieldAccessors
-                |> List.map (\fn -> fn schemaShape)
-                |> NestedField schemaName
     in
-        always nestedField
+        Query name
+            shape
+            { select = []
+            , filter = []
+            , order = []
+            }
 
 
+subQuery : Query s -> a -> Field
+subQuery query =
+    let
+        ( name, _, params ) =
+            unwrapQuery query
+    in
+        always <| Nested name params
 
--- Query Builder
+
+(.) : Query s -> a -> Field
+(.) =
+    subQuery
+
+
+select : List (s -> Field) -> Query s -> Query s
+select selects query =
+    let
+        -- addSelects : s -> QueryParams -> QueryParams
+        -- https://github.com/elm-lang/elm-compiler/issues/1214
+        addSelects shape params =
+            { params
+                | select = params.select ++ List.map (\fn -> fn shape) selects
+            }
+    in
+        mapQueryParams addSelects query
+
+
+order : List (s -> OrderBy) -> Query s -> Query s
+order orders query =
+    let
+        -- addOrders : s -> QueryParams -> QueryParams
+        addOrders shape params =
+            { params
+                | order = params.order ++ List.map (\fn -> fn shape) orders
+            }
+    in
+        mapQueryParams addOrders query
+
+
+filter : List (s -> Filter) -> Query s -> Query s
+filter filters query =
+    let
+        -- addFilters : s -> QueryParams -> QueryParams
+        addFilters shape params =
+            { params
+                | filter = params.filter ++ List.map (\fn -> fn shape) filters
+            }
+    in
+        mapQueryParams addFilters query
+
+
+mapQueryParams : (s -> QueryParams -> QueryParams) -> Query s -> Query s
+mapQueryParams fn query =
+    let
+        ( name, shape, params ) =
+            unwrapQuery query
+    in
+        Query name shape (fn shape params)
+
+
+singleValueFilterFn :
+    (String -> Condition)
+    -> a
+    -> (s -> Field)
+    -> (s -> Filter)
+singleValueFilterFn condCtor condArg fieldAccessor =
+    let
+        -- shapeToFilter : s -> Filter
+        shapeToFilter shape =
+            Filter False
+                (condCtor (coerceToString condArg))
+                (fieldAccessor shape)
+    in
+        shapeToFilter
 
 
 {-| -}
-read : String -> Schema shape -> Query shape
-read url schema =
-    Query
-        { fields = []
-        , filters = []
-        , orders = []
-        , limit = Nothing
-        , offset = Nothing
-        , singular = False
-        , suppressCount = True
-        , verb = "GET"
-        , schema = schema
-        , url = url
+like : String -> (s -> Field) -> (s -> Filter)
+like =
+    singleValueFilterFn Like
+
+
+{-| -}
+eq : a -> (s -> Field) -> (s -> Filter)
+eq =
+    singleValueFilterFn Eq
+
+
+{-| -}
+gte : a -> (s -> Field) -> (s -> Filter)
+gte =
+    singleValueFilterFn Gte
+
+
+{-| -}
+gt : a -> (s -> Field) -> (s -> Filter)
+gt =
+    singleValueFilterFn Gt
+
+
+{-| -}
+lte : a -> (s -> Field) -> (s -> Filter)
+lte =
+    singleValueFilterFn Lte
+
+
+{-| -}
+lt : a -> (s -> Field) -> (s -> Filter)
+lt =
+    singleValueFilterFn Lt
+
+
+{-| -}
+ilike : String -> (s -> Field) -> (s -> Filter)
+ilike =
+    singleValueFilterFn ILike
+
+
+{-| -}
+in' : List a -> (s -> Field) -> (s -> Filter)
+in' condArgs fieldAccessor =
+    let
+        shapeToFilter shape =
+            Filter False
+                (In (List.map coerceToString condArgs))
+                (fieldAccessor shape)
+    in
+        shapeToFilter
+
+
+{-| -}
+is : a -> (s -> Field) -> (s -> Filter)
+is =
+    singleValueFilterFn Is
+
+
+{-| -}
+not' :
+    (a -> (s -> Field) -> (s -> Filter))
+    -> a
+    -> (s -> Field)
+    -> (s -> Filter)
+not' filterAccessorCtor val fieldAccessor =
+    let
+        filterAccessor =
+            filterAccessorCtor val fieldAccessor
+
+        shapeToNegatedFilter shape =
+            case filterAccessor shape of
+                Filter negated cond field ->
+                    Filter (not negated) cond field
+    in
+        shapeToNegatedFilter
+
+
+{-| -}
+asc : (s -> Field) -> (s -> OrderBy)
+asc fieldAccessor =
+    (\shape -> Asc (fieldAccessor shape))
+
+
+{-| -}
+desc : (s -> Field) -> (s -> OrderBy)
+desc fieldAccessor =
+    (\shape -> Desc (fieldAccessor shape))
+
+
+{-| -}
+postgRest : String -> Settings -> Query s -> Http.Request
+postgRest url settings query =
+    let
+        { count, singular, limit, offset } =
+            settings
+
+        ( name, _, { select, filter, order } ) =
+            unwrapQuery query
+
+        trailingSlashUrl =
+            if String.right 1 url == "/" then
+                url
+            else
+                url ++ "/"
+
+        queryUrl =
+            [ ordersToKeyValue order
+            , fieldsToKeyValue select
+            , filtersToKeyValues filter
+            , offsetToKeyValue offset
+            , limitToKeyValues limit
+            ]
+                |> List.foldl (++) []
+                |> Http.url (trailingSlashUrl ++ name)
+
+        pluralityHeader =
+            if singular then
+                [ ( "Prefer", "plurality=singular" ) ]
+            else
+                []
+
+        countHeader =
+            if not count then
+                [ ( "Prefer", "count=none" ) ]
+            else
+                []
+
+        headers =
+            pluralityHeader ++ countHeader
+    in
+        { verb = "GET"
+        , headers = headers
+        , url = queryUrl
+        , body = Http.empty
         }
 
 
-
--- Selecting
-
-
-{-| -}
-select : List (shape -> Field shape) -> Query shape -> Query shape
-select fieldAccessors query =
+fieldsToKeyValue : List Field -> List ( String, String )
+fieldsToKeyValue fields =
     let
-        unwrappedQuery =
-            unwrapQuery query
+        fieldToString : Field -> String
+        fieldToString field =
+            case field of
+                Simple name ->
+                    name
 
-        ( _, schemaShape ) =
-            unwrapSchema unwrappedQuery.schema
+                Nested name { select } ->
+                    name ++ "{" ++ fieldsToString select ++ "}"
+
+        fieldsToString : List Field -> String
+        fieldsToString fields =
+            case fields of
+                [] ->
+                    "*"
+
+                _ ->
+                    fields
+                        |> List.map fieldToString
+                        |> String.join ","
     in
-        Query
-            { unwrappedQuery
-              -- NOTE: we append new props, is this the best api?
-                | fields = unwrappedQuery.fields ++ List.map (\fn -> fn schemaShape) fieldAccessors
-            }
+        case fields of
+            [] ->
+                []
+
+            _ ->
+                [ ( "select", fieldsToString fields ) ]
 
 
-
--- Filtering
--- TODO: take a look here for api example: https://docs.djangoproject.com/en/1.10/ref/models/querysets/#field-lookups
-
-
-{-| -}
-filter : List (shape -> Filter shape) -> Query shape -> Query shape
-filter filterAccessors query =
+filtersToKeyValues : List Filter -> List ( String, String )
+filtersToKeyValues filters =
     let
-        unwrappedQuery =
-            unwrapQuery query
+        contToString : Condition -> String
+        contToString cond =
+            case cond of
+                Like str ->
+                    "like." ++ str
 
-        ( _, schemaShape ) =
-            unwrapSchema unwrappedQuery.schema
+                Eq str ->
+                    "eq." ++ str
+
+                Gte str ->
+                    "gte." ++ str
+
+                Gt str ->
+                    "gt." ++ str
+
+                Lte str ->
+                    "lte." ++ str
+
+                Lt str ->
+                    "lt." ++ str
+
+                ILike str ->
+                    "ilike." ++ str
+
+                In list ->
+                    "in." ++ String.join "," list
+
+                Is str ->
+                    "is." ++ str
+
+        filterToKeyValue : Filter -> Maybe ( String, String )
+        filterToKeyValue filter =
+            case filter of
+                Filter True cond (Simple key) ->
+                    Just ( key, "not." ++ contToString cond )
+
+                Filter False cond (Simple key) ->
+                    Just ( key, contToString cond )
+
+                Filter _ _ (Nested _ _) ->
+                    Nothing
     in
-        Query
-            { unwrappedQuery
-                | filters = unwrappedQuery.filters ++ List.map (\fn -> fn schemaShape) filterAccessors
-            }
+        List.filterMap filterToKeyValue filters
 
 
-{-| -}
-toFilterFn : (Field shape -> a -> Condition shape) -> a -> (shape -> Field shape) -> (shape -> Filter shape)
-toFilterFn condValueConstructor val fieldAccessor =
-    (\shape -> Filter False (condValueConstructor (fieldAccessor shape) val))
-
-
-{-| -}
-like : String -> (shape -> Field shape) -> (shape -> Filter shape)
-like =
-    toFilterFn Like
-
-
-{-| -}
-eq : String -> (shape -> Field shape) -> (shape -> Filter shape)
-eq =
-    toFilterFn Eq
-
-
-{-| -}
-gte : String -> (shape -> Field shape) -> (shape -> Filter shape)
-gte =
-    toFilterFn Gte
-
-
-{-| -}
-gt : String -> (shape -> Field shape) -> (shape -> Filter shape)
-gt =
-    toFilterFn Gt
-
-
-{-| -}
-lte : String -> (shape -> Field shape) -> (shape -> Filter shape)
-lte =
-    toFilterFn Lte
-
-
-{-| -}
-lt : String -> (shape -> Field shape) -> (shape -> Filter shape)
-lt =
-    toFilterFn Lt
-
-
-{-| -}
-neq : String -> (shape -> Field shape) -> (shape -> Filter shape)
-neq =
-    -- TODO: DEPRECATE in favor of smaller base api.
-    not' eq
-
-
-{-| -}
-ilike : String -> (shape -> Field shape) -> (shape -> Filter shape)
-ilike =
-    -- TODO: What is the best name for this? Too low level?
-    toFilterFn ILike
-
-
-{-| -}
-in' : List String -> (shape -> Field shape) -> (shape -> Filter shape)
-in' =
-    -- TODO: What is the best name for this?
-    toFilterFn In
-
-
-{-| -}
-notin : List String -> (shape -> Field shape) -> (shape -> Filter shape)
-notin =
-    -- TODO: DEPRECATE
-    not' in'
-
-
-{-| -}
-is : String -> (shape -> Field shape) -> (shape -> Filter shape)
-is =
-    toFilterFn Is
-
-
-{-| -}
-isnot : String -> (shape -> Field shape) -> (shape -> Filter shape)
-isnot =
-    -- TODO: DEPRECATE
-    not' is
-
-
-{-| -}
-contains : String -> (shape -> Field shape) -> (shape -> Filter shape)
-contains =
-    -- TODO: Is this the right name? I don't think so.
-    -- https://docs.djangoproject.com/en/1.10/ref/models/querysets/#contains
-    toFilterFn Contains
-
-
-{-| -}
-not' : (a -> (shape -> Field shape) -> (shape -> Filter shape)) -> a -> (shape -> Field shape) -> (shape -> Filter shape)
-not' filterAccessorConstructor val fieldAccessor =
-    -- TODO: What is the best name for this?
+ordersToKeyValue : List OrderBy -> List ( String, String )
+ordersToKeyValue orders =
     let
-        filterAccessor =
-            filterAccessorConstructor val fieldAccessor
+        orderToString : OrderBy -> Maybe String
+        orderToString order =
+            case order of
+                Asc (Simple name) ->
+                    Just (name ++ ".asc")
+
+                Desc (Simple name) ->
+                    Just (name ++ ".desc")
+
+                _ ->
+                    Nothing
+
+        ordersToString : List OrderBy -> String
+        ordersToString order =
+            orders
+                |> List.filterMap orderToString
+                |> String.join ","
     in
-        (\shape ->
-            case filterAccessor shape of
-                Filter negated cond ->
-                    Filter (not negated) cond
-        )
+        case orders of
+            [] ->
+                []
+
+            _ ->
+                [ ( "order", ordersToString orders ) ]
 
 
+offsetToKeyValue : Maybe Int -> List ( String, String )
+offsetToKeyValue maybeOffset =
+    case maybeOffset of
+        Nothing ->
+            []
 
--- Ordering
-
-
-{-| -}
-order : List (shape -> OrderBy shape) -> Query shape -> Query shape
-order orderByAccessors query =
-    let
-        unwrappedQuery =
-            unwrapQuery query
-
-        ( _, shape ) =
-            unwrapSchema unwrappedQuery.schema
-    in
-        Query
-            { unwrappedQuery
-                | orders = unwrappedQuery.orders ++ List.map (\fn -> fn shape) orderByAccessors
-            }
+        Just offset ->
+            [ ( "offset", toString offset ) ]
 
 
-{-| -}
-asc : (shape -> Field shape) -> (shape -> OrderBy shape)
-asc fieldAccessor =
-    (\shape -> Ascending (fieldAccessor shape))
+limitToKeyValues : Maybe Int -> List ( String, String )
+limitToKeyValues maybeLimit =
+    case maybeLimit of
+        Nothing ->
+            []
 
-
-{-| -}
-desc : (shape -> Field shape) -> (shape -> OrderBy shape)
-desc fieldAccessor =
-    (\shape -> Descending (fieldAccessor shape))
-
-
-
--- Count and Pagination
-
-
-{-| -}
-offset : Int -> Query shape -> Query shape
-offset offset' query =
-    -- TODO: setting?
-    let
-        unwrapped =
-            unwrapQuery query
-    in
-        Query { unwrapped | offset = Just offset' }
-
-
-{-| -}
-limit : Int -> Query shape -> Query shape
-limit limit' query =
-    let
-        unwrapped =
-            unwrapQuery query
-    in
-        Query { unwrapped | limit = Just limit' }
-
-
-{-| -}
-paginate : Int -> Int -> Query shape -> Query shape
-paginate pageSize pageNumber query =
-    let
-        unwrapped =
-            unwrapQuery query
-    in
-        Query
-            { unwrapped
-              -- TODO: should this append?
-                | limit = Just pageSize
-                , offset = Just <| (pageNumber - 1) * pageSize
-            }
-
-
-{-| -}
-singular : Query shape -> Query shape
-singular query =
-    let
-        unwrapped =
-            unwrapQuery query
-    in
-        Query { unwrapped | singular = True }
-
-
-{-| -}
-count : Query shape -> Query shape
-count query =
-    -- NOTE: maybe this belongs as a settings? it's nice to have it as a fn,
-    -- but it allows for a potentially confusing user interaction of calling
-    -- count more than once. what other functions may belong as settings?
-    -- this might be a perfect canidate for a Query.Settings! the adapter can go
-    -- in there too, and dev mode options, etc.
-    let
-        unwrapped =
-            unwrapQuery query
-    in
-        Query { unwrapped | suppressCount = False }
-
-
-
--- Query Task Builder
-
-
-{-| -}
-send : (Query shape -> Http.Request) -> Http.Settings -> Query shape -> Task.Task Http.RawError Http.Response
-send adapter settings restRequest =
-    restRequest
-        |> adapter
-        |> Http.send settings
+        Just limit ->
+            [ ( "limit", toString limit ) ]
