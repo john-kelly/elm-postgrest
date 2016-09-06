@@ -36,24 +36,24 @@ speaker =
         }
 
 
-speakerQuery =
-    query speaker
-        |> select [ .id, .bio ]
-        |> filter [ .id |> gte 10 ]
-        |> order [ asc .name ]
-
-
 sessionQuery =
-    query session
-        |> select
-            [ .id
-            , .speaker_id
-            , .start_time
-            , (.) speakerQuery
-            ]
-        |> filter [ .location |> not' like "%Russia%" ]
-        |> order [ asc .start_time ]
-        |> postgRest "http://postgrest.herokuapp.com/" defaultSettings
+    let
+        speakerQuery =
+            query speaker
+                |> select [ .id, .bio ]
+                |> filter [ .id |> gte 10 ]
+                |> order [ asc .name ]
+    in
+        query session
+            |> select
+                [ .id
+                , .speaker_id
+                , .start_time
+                , (.) speakerQuery
+                ]
+            |> filter [ .location |> not' like "%Russia%" ]
+            |> order [ asc .start_time ]
+            |> postgRest "http://postgrest.herokuapp.com/" defaultSettings
 
 
 main =

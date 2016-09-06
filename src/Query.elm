@@ -27,7 +27,7 @@ type Schema s
 
 type
     Query s
-    -- | Mutation can go here! or maybe CRUD!!!
+    -- | Mutation can go here. or maybe flesh out all of CRUD
     = Query String s QueryParams
 
 
@@ -92,13 +92,9 @@ type Condition
     | Is String
 
 
-{-| Comment/Blog about why String vs Field. By
-Just having String. We simply move the weird issue of having to worry about
-the possible Nested case to another location. This is the same realization that i came to
-when i decided to just have shape and string in Query instead of including the
-entire Schema type. however it did not make sense to do it in this case because
-being able to convert nested into a Nothing later on just made more sense.
-i wonder what this is called. this is very interesting.
+{-| Is it possible to make the illegal state of a Filter on a Nested Field Unrepresentable?
+https://fsharpforfunandprofit.com/posts/designing-with-types-making-illegal-states-unrepresentable/
+https://blogs.janestreet.com/effective-ml-revisited/
 -}
 type Filter
     = Filter Bool Condition Field
