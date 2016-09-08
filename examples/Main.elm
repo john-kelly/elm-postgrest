@@ -1,7 +1,5 @@
 module Main exposing (..)
 
--- Core
-
 import Html exposing (Html, text)
 import Html.App as App
 import Http
@@ -20,10 +18,6 @@ session =
         }
 
 
-
--- List
-
-
 speaker =
     schema "speakers"
         { id = field "id"
@@ -36,13 +30,13 @@ speaker =
         }
 
 
-sessionQuery =
+sessionCmd =
     let
         speakerQuery =
             query speaker
                 |> select [ .id, .bio ]
                 |> filter [ .id |> gte 10 ]
-                |> order [ asc .name ]
+                |> order [ asc .name, desc .bio, desc .featured ]
     in
         query session
             |> select
@@ -52,13 +46,15 @@ sessionQuery =
                 , (.) speakerQuery
                 ]
             |> filter [ .location |> not' like "%Russia%" ]
-            |> order [ asc .start_time ]
+            |> order [ asc .start_time, asc .location, asc .session_type ]
             |> postgRest "http://postgrest.herokuapp.com/" defaultSettings
+            |> Http.send Http.defaultSettings
+            |> Task.perform FetchFail FetchSucceed
 
 
 main =
     App.program
-        { init = ( { sessions = Nothing }, Cmd.none )
+        { init = ( { sessions = Nothing }, sessionCmd )
         , update = update
         , view = view
         , subscriptions = \_ -> Sub.none
@@ -99,4 +95,4 @@ update msg model =
 
 view : Model -> Html Msg
 view { sessions } =
-    toString sessionQuery |> text
+    toString sessions |> text

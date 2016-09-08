@@ -1,5 +1,6 @@
 module Query exposing (..)
 
+import Dict
 import Http
 import Json.Decode as Decode
 import String
@@ -25,9 +26,7 @@ type Schema s
     = Schema String s
 
 
-type
-    Query s
-    -- | Mutation can go here. or maybe flesh out all of CRUD
+type Query s
     = Query String s QueryParams
 
 
@@ -120,6 +119,7 @@ field =
     Simple
 
 
+{-| -}
 query : Schema s -> Query s
 query schema =
     let
@@ -134,6 +134,7 @@ query schema =
             }
 
 
+{-| -}
 subQuery : Query s -> a -> Field
 subQuery query =
     let
@@ -143,11 +144,13 @@ subQuery query =
         always <| Nested name params
 
 
+{-| -}
 (.) : Query s -> a -> Field
 (.) =
     subQuery
 
 
+{-| -}
 select : List (s -> Field) -> Query s -> Query s
 select selects query =
     let
@@ -161,6 +164,7 @@ select selects query =
         mapQueryParams addSelects query
 
 
+{-| -}
 order : List (s -> OrderBy) -> Query s -> Query s
 order orders query =
     let
@@ -173,6 +177,7 @@ order orders query =
         mapQueryParams addOrders query
 
 
+{-| -}
 filter : List (s -> Filter) -> Query s -> Query s
 filter filters query =
     let
@@ -308,7 +313,7 @@ postgRest url settings query =
         { count, singular, limit, offset } =
             settings
 
-        ( name, _, { select, filter, order } ) =
+        ( name, _, params ) =
             unwrapQuery query
 
         trailingSlashUrl =
@@ -318,9 +323,13 @@ postgRest url settings query =
                 url ++ "/"
 
         queryUrl =
-            [ ordersToKeyValue order
-            , fieldsToKeyValue select
-            , filtersToKeyValues filter
+            [ fieldsToKeyValue params.select
+            , params
+                |> labelOrders ""
+                |> labeledOrdersToKeyValue
+            , params
+                |> labelFilters ""
+                |> labeledFiltersToKeyValues
             , offsetToKeyValue offset
             , limitToKeyValues limit
             ]
@@ -380,8 +389,33 @@ fieldsToKeyValue fields =
                 [ ( "select", fieldsToString fields ) ]
 
 
-filtersToKeyValues : List Filter -> List ( String, String )
-filtersToKeyValues filters =
+labelFilters : String -> QueryParams -> List ( String, Filter )
+labelFilters prefix params =
+    let
+        labelWithPrefix =
+            (,) prefix
+
+        labeledFilters =
+            List.map labelWithPrefix params.filter
+
+        labelNestedFilters field =
+            case field of
+                Simple _ ->
+                    Nothing
+
+                Nested nestedName nestedParams ->
+                    Just (labelFilters (prefix ++ nestedName ++ ".") nestedParams)
+
+        labeledNestedFilters =
+            params.select
+                |> List.filterMap labelNestedFilters
+                |> List.concat
+    in
+        labeledFilters ++ labeledNestedFilters
+
+
+labeledFiltersToKeyValues : List ( String, Filter ) -> List ( String, String )
+labeledFiltersToKeyValues filters =
     let
         contToString : Condition -> String
         contToString cond =
@@ -413,14 +447,14 @@ filtersToKeyValues filters =
                 Is str ->
                     "is." ++ str
 
-        filterToKeyValue : Filter -> Maybe ( String, String )
-        filterToKeyValue filter =
+        filterToKeyValue : ( String, Filter ) -> Maybe ( String, String )
+        filterToKeyValue ( prefix, filter ) =
             case filter of
                 Filter True cond (Simple key) ->
-                    Just ( key, "not." ++ contToString cond )
+                    Just ( prefix ++ key, "not." ++ contToString cond )
 
                 Filter False cond (Simple key) ->
-                    Just ( key, contToString cond )
+                    Just ( prefix ++ key, contToString cond )
 
                 Filter _ _ (Nested _ _) ->
                     Nothing
@@ -428,9 +462,48 @@ filtersToKeyValues filters =
         List.filterMap filterToKeyValue filters
 
 
-ordersToKeyValue : List OrderBy -> List ( String, String )
-ordersToKeyValue orders =
+labelOrders : String -> QueryParams -> List ( String, OrderBy )
+labelOrders prefix params =
     let
+        labelWithPrefix =
+            (,) prefix
+
+        labeledOrders =
+            List.map labelWithPrefix params.order
+
+        labelNestedOrders field =
+            case field of
+                Simple _ ->
+                    Nothing
+
+                Nested nestedName nestedParams ->
+                    Just (labelOrders (prefix ++ nestedName ++ ".") nestedParams)
+
+        labeledNestedOrders =
+            params.select
+                |> List.filterMap labelNestedOrders
+                |> List.concat
+    in
+        labeledOrders ++ labeledNestedOrders
+
+
+labeledOrdersToKeyValue : List ( String, OrderBy ) -> List ( String, String )
+labeledOrdersToKeyValue orders =
+    let
+        labeledOrderToKeyValue : ( String, List OrderBy ) -> Maybe ( String, String )
+        labeledOrderToKeyValue ( prefix, orders ) =
+            case orders of
+                [] ->
+                    Nothing
+
+                _ ->
+                    Just
+                        ( prefix ++ "order"
+                        , orders
+                            |> List.filterMap orderToString
+                            |> String.join ","
+                        )
+
         orderToString : OrderBy -> Maybe String
         orderToString order =
             case order of
@@ -442,19 +515,24 @@ ordersToKeyValue orders =
 
                 _ ->
                     Nothing
-
-        ordersToString : List OrderBy -> String
-        ordersToString order =
-            orders
-                |> List.filterMap orderToString
-                |> String.join ","
     in
-        case orders of
-            [] ->
-                []
+        orders
+            |> List.foldr
+                (\( prefix, order ) dict ->
+                    Dict.update prefix
+                        (\m ->
+                            case m of
+                                Nothing ->
+                                    Just [ order ]
 
-            _ ->
-                [ ( "order", ordersToString orders ) ]
+                                Just os ->
+                                    Just (order :: os)
+                        )
+                        dict
+                )
+                Dict.empty
+            |> Dict.toList
+            |> List.filterMap labeledOrderToKeyValue
 
 
 offsetToKeyValue : Maybe Int -> List ( String, String )
