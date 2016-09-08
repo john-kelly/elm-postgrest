@@ -1,7 +1,6 @@
 module PostgRest
     exposing
-        ( postgRest
-        , Schema
+        ( Schema
         , Query
         , Field
         , OrderBy
@@ -27,9 +26,12 @@ module PostgRest
         , not'
         , asc
         , desc
+        , postgRest
         )
 
-{-| -}
+{-| PostgREST Query Builder
+@docs Schema, Query, Field, OrderBy, Filter, Settings, defaultSettings, schema, field, query, subQuery, select, order, filter, like, eq, gte, gt, lte, lt, ilike, in', is, not', asc, desc, postgRest
+-}
 
 import Dict
 import Http
@@ -43,7 +45,6 @@ type Schema s
     = Schema String s
 
 
-{-| -}
 unwrapSchema : Schema s -> ( String, s )
 unwrapSchema schema =
     case schema of
@@ -95,10 +96,7 @@ type Condition
     | Is String
 
 
-{-| Is it possible to make the illegal state of a Filter on a Nested Field Unrepresentable?
-https://fsharpforfunandprofit.com/posts/designing-with-types-making-illegal-states-unrepresentable/
-https://blogs.janestreet.com/effective-ml-revisited/
--}
+{-| -}
 type Filter
     = Filter Bool Condition Field
 
