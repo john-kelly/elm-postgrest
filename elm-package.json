@@ -1,16 +1,14 @@
 {
     "version": "1.0.0",
-    "summary": "DSL for building complex HTTP queries in Elm!",
-    "repository": "https://github.com/john-kelly/elm-query.git",
+    "summary": "PostgREST Query Builder",
+    "repository": "https://github.com/john-kelly/elm-postgrest.git",
     "license": "BSD3",
     "source-directories": [
         "src"
     ],
     "exposed-modules": [
-        "Query",
-        "Query.Adapters",
-        "Query.Infix",
-        "Query.Types"
+        "PostgREST",
+        "PostgREST.Infix",
     ],
     "dependencies": {
         "elm-lang/core": "4.0.5 <= v < 5.0.0",

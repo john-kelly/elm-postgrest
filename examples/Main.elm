@@ -4,9 +4,8 @@ import Html exposing (Html, text)
 import Html.App as App
 import Http
 import Task
-import Query exposing (..)
-import Query.Adapters exposing (postgRest)
-import Query.Infix exposing ((.))
+import PostgRest exposing (..)
+import PostgRest.Infix exposing ((.))
 
 
 session =
@@ -48,7 +47,7 @@ sessionCmd =
                 ]
             |> filter [ .location |> not' like "%Russia%" ]
             |> order [ desc .id ]
-            |> postgRest "http://postgrest.herokuapp.com/" Query.defaultSettings
+            |> postgRest "http://postgrest.herokuapp.com/" PostgRest.defaultSettings
             |> Http.send Http.defaultSettings
             |> Task.perform FetchFail FetchSucceed
 
