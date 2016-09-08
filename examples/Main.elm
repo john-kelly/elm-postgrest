@@ -48,7 +48,7 @@ sessionCmd =
                 ]
             |> filter [ .location |> not' like "%Russia%" ]
             |> order [ desc .id ]
-            |> postgRest "http://postgrest.herokuapp.com/" defaultSettings
+            |> postgRest "http://postgrest.herokuapp.com/" Query.defaultSettings
             |> Http.send Http.defaultSettings
             |> Task.perform FetchFail FetchSucceed
 
