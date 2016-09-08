@@ -34,22 +34,27 @@ import Json.Decode as Decode
 import Query.Types exposing (..)
 
 
+{-| -}
 type alias Schema s =
     Query.Types.Schema s
 
 
+{-| -}
 type alias Query s =
     Query.Types.Query s
 
 
+{-| -}
 type alias Field =
     Query.Types.Field
 
 
+{-| -}
 type alias OrderBy =
     Query.Types.OrderBy
 
 
+{-| -}
 type alias Filter =
     Query.Types.Filter
 
