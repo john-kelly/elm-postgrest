@@ -29,7 +29,7 @@ module PostgRest
         , postgRest
         )
 
-{-| PostgREST Query Builder
+{-| PostgREST Query Builder!
 @docs Schema, Query, Field, OrderBy, Filter, Settings, defaultSettings, schema, field, query, subQuery, select, order, filter, like, eq, gte, gt, lte, lt, ilike, in', is, not', asc, desc, postgRest
 -}
 
