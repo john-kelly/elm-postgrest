@@ -1,6 +1,6 @@
 module PostgRest.Infix exposing ((.))
 
-{-| PostgREST Query Builder
+{-| PostgREST Infix Operators
 @docs (.)
 -}
 
