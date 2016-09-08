@@ -37,18 +37,17 @@ sessionCmd =
         speakerQuery =
             query speaker
                 |> select [ .id, .bio ]
-                |> filter [ .id |> gte 10 ]
-                |> order [ asc .name, desc .bio, desc .featured ]
     in
         query session
             |> select
                 [ .id
                 , .speaker_id
                 , .start_time
+                , .location
                 , (.) speakerQuery
                 ]
             |> filter [ .location |> not' like "%Russia%" ]
-            |> order [ asc .start_time, asc .location, asc .session_type ]
+            |> order [ desc .id ]
             |> postgRest "http://postgrest.herokuapp.com/" defaultSettings
             |> Http.send Http.defaultSettings
             |> Task.perform FetchFail FetchSucceed
