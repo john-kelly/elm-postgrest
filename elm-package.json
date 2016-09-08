@@ -7,7 +7,10 @@
         "src"
     ],
     "exposed-modules": [
-        "Query"
+        "Query",
+        "Query.Adapters",
+        "Query.Infix",
+        "Query.Types"
     ],
     "dependencies": {
         "elm-lang/core": "4.0.5 <= v < 5.0.0",

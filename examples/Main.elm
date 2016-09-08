@@ -5,6 +5,8 @@ import Html.App as App
 import Http
 import Task
 import Query exposing (..)
+import Query.Adapters exposing (postgRest)
+import Query.Infix exposing ((.))
 
 
 session =

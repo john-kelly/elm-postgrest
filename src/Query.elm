@@ -1,10 +1,76 @@
-module Query exposing (..)
+module Query
+    exposing
+        ( Schema
+        , Query
+        , Field
+        , OrderBy
+        , Filter
+        , Settings
+        , defaultSettings
+        , schema
+        , field
+        , query
+        , subQuery
+        , select
+        , order
+        , filter
+        , like
+        , eq
+        , gte
+        , gt
+        , lte
+        , lt
+        , ilike
+        , in'
+        , is
+        , not'
+        , asc
+        , desc
+        )
 
-import Dict
-import Http
+{-| -}
+
 import Json.Decode as Decode
-import String
-import Task
+import Query.Types exposing (..)
+
+
+type alias Schema s =
+    Query.Types.Schema s
+
+
+type alias Query s =
+    Query.Types.Query s
+
+
+type alias Field =
+    Query.Types.Field
+
+
+type alias OrderBy =
+    Query.Types.OrderBy
+
+
+type alias Filter =
+    Query.Types.Filter
+
+
+{-| -}
+type alias Settings =
+    { count : Bool
+    , singular : Bool
+    , limit : Maybe Int
+    , offset : Maybe Int
+    }
+
+
+{-| -}
+defaultSettings : Settings
+defaultSettings =
+    { count = False
+    , singular = False
+    , limit = Nothing
+    , offset = Nothing
+    }
 
 
 {-| thanks lukewestby
@@ -22,95 +88,9 @@ coerceToString value =
 
 
 {-| -}
-type Schema s
-    = Schema String s
-
-
-type Query s
-    = Query String s QueryParams
-
-
-unwrapQuery : Query s -> ( String, s, QueryParams )
-unwrapQuery query =
-    case query of
-        Query name shape params ->
-            ( name, shape, params )
-
-
-{-|
--}
-type alias Settings =
-    { count : Bool
-    , singular : Bool
-    , limit : Maybe Int
-    , offset : Maybe Int
-    }
-
-
-defaultSettings : Settings
-defaultSettings =
-    { count = False
-    , singular = False
-    , limit = Nothing
-    , offset = Nothing
-    }
-
-
-type alias QueryParams =
-    { select :
-        List Field
-        -- should represent this with Maybe List so that we have a
-        -- difference between no selection and all selection
-    , order : List OrderBy
-    , filter : List Filter
-    }
-
-
-{-| -}
-type Field
-    = Simple String
-    | Nested String QueryParams
-
-
-{-| -}
-type OrderBy
-    = Asc Field
-    | Desc Field
-
-
-{-| -}
-type Condition
-    = Like String
-    | ILike String
-    | Eq String
-    | Gte String
-    | Gt String
-    | Lte String
-    | Lt String
-    | In (List String)
-    | Is String
-
-
-{-| Is it possible to make the illegal state of a Filter on a Nested Field Unrepresentable?
-https://fsharpforfunandprofit.com/posts/designing-with-types-making-illegal-states-unrepresentable/
-https://blogs.janestreet.com/effective-ml-revisited/
--}
-type Filter
-    = Filter Bool Condition Field
-
-
-{-| -}
 schema : String -> s -> Schema s
 schema =
     Schema
-
-
-{-| -}
-unwrapSchema : Schema s -> ( String, s )
-unwrapSchema schema =
-    case schema of
-        Schema name shape ->
-            ( name, shape )
 
 
 {-| -}
@@ -142,12 +122,6 @@ subQuery query =
             unwrapQuery query
     in
         always <| Nested name params
-
-
-{-| -}
-(.) : Query s -> a -> Field
-(.) =
-    subQuery
 
 
 {-| -}
@@ -304,252 +278,3 @@ asc fieldAccessor =
 desc : (s -> Field) -> (s -> OrderBy)
 desc fieldAccessor =
     (\shape -> Desc (fieldAccessor shape))
-
-
-{-| -}
-postgRest : String -> Settings -> Query s -> Http.Request
-postgRest url settings query =
-    let
-        { count, singular, limit, offset } =
-            settings
-
-        ( name, _, params ) =
-            unwrapQuery query
-
-        trailingSlashUrl =
-            if String.right 1 url == "/" then
-                url
-            else
-                url ++ "/"
-
-        queryUrl =
-            [ fieldsToKeyValue params.select
-            , params
-                |> labelOrders ""
-                |> labeledOrdersToKeyValue
-            , params
-                |> labelFilters ""
-                |> labeledFiltersToKeyValues
-            , offsetToKeyValue offset
-            , limitToKeyValues limit
-            ]
-                |> List.foldl (++) []
-                |> Http.url (trailingSlashUrl ++ name)
-
-        pluralityHeader =
-            if singular then
-                [ ( "Prefer", "plurality=singular" ) ]
-            else
-                []
-
-        countHeader =
-            if not count then
-                [ ( "Prefer", "count=none" ) ]
-            else
-                []
-
-        headers =
-            pluralityHeader ++ countHeader
-    in
-        { verb = "GET"
-        , headers = headers
-        , url = queryUrl
-        , body = Http.empty
-        }
-
-
-fieldsToKeyValue : List Field -> List ( String, String )
-fieldsToKeyValue fields =
-    let
-        fieldToString : Field -> String
-        fieldToString field =
-            case field of
-                Simple name ->
-                    name
-
-                Nested name { select } ->
-                    name ++ "{" ++ fieldsToString select ++ "}"
-
-        fieldsToString : List Field -> String
-        fieldsToString fields =
-            case fields of
-                [] ->
-                    "*"
-
-                _ ->
-                    fields
-                        |> List.map fieldToString
-                        |> String.join ","
-    in
-        case fields of
-            [] ->
-                []
-
-            _ ->
-                [ ( "select", fieldsToString fields ) ]
-
-
-labelFilters : String -> QueryParams -> List ( String, Filter )
-labelFilters prefix params =
-    let
-        labelWithPrefix =
-            (,) prefix
-
-        labeledFilters =
-            List.map labelWithPrefix params.filter
-
-        labelNestedFilters field =
-            case field of
-                Simple _ ->
-                    Nothing
-
-                Nested nestedName nestedParams ->
-                    Just (labelFilters (prefix ++ nestedName ++ ".") nestedParams)
-
-        labeledNestedFilters =
-            params.select
-                |> List.filterMap labelNestedFilters
-                |> List.concat
-    in
-        labeledFilters ++ labeledNestedFilters
-
-
-labeledFiltersToKeyValues : List ( String, Filter ) -> List ( String, String )
-labeledFiltersToKeyValues filters =
-    let
-        contToString : Condition -> String
-        contToString cond =
-            case cond of
-                Like str ->
-                    "like." ++ str
-
-                Eq str ->
-                    "eq." ++ str
-
-                Gte str ->
-                    "gte." ++ str
-
-                Gt str ->
-                    "gt." ++ str
-
-                Lte str ->
-                    "lte." ++ str
-
-                Lt str ->
-                    "lt." ++ str
-
-                ILike str ->
-                    "ilike." ++ str
-
-                In list ->
-                    "in." ++ String.join "," list
-
-                Is str ->
-                    "is." ++ str
-
-        filterToKeyValue : ( String, Filter ) -> Maybe ( String, String )
-        filterToKeyValue ( prefix, filter ) =
-            case filter of
-                Filter True cond (Simple key) ->
-                    Just ( prefix ++ key, "not." ++ contToString cond )
-
-                Filter False cond (Simple key) ->
-                    Just ( prefix ++ key, contToString cond )
-
-                Filter _ _ (Nested _ _) ->
-                    Nothing
-    in
-        List.filterMap filterToKeyValue filters
-
-
-labelOrders : String -> QueryParams -> List ( String, OrderBy )
-labelOrders prefix params =
-    let
-        labelWithPrefix =
-            (,) prefix
-
-        labeledOrders =
-            List.map labelWithPrefix params.order
-
-        labelNestedOrders field =
-            case field of
-                Simple _ ->
-                    Nothing
-
-                Nested nestedName nestedParams ->
-                    Just (labelOrders (prefix ++ nestedName ++ ".") nestedParams)
-
-        labeledNestedOrders =
-            params.select
-                |> List.filterMap labelNestedOrders
-                |> List.concat
-    in
-        labeledOrders ++ labeledNestedOrders
-
-
-labeledOrdersToKeyValue : List ( String, OrderBy ) -> List ( String, String )
-labeledOrdersToKeyValue orders =
-    let
-        labeledOrderToKeyValue : ( String, List OrderBy ) -> Maybe ( String, String )
-        labeledOrderToKeyValue ( prefix, orders ) =
-            case orders of
-                [] ->
-                    Nothing
-
-                _ ->
-                    Just
-                        ( prefix ++ "order"
-                        , orders
-                            |> List.filterMap orderToString
-                            |> String.join ","
-                        )
-
-        orderToString : OrderBy -> Maybe String
-        orderToString order =
-            case order of
-                Asc (Simple name) ->
-                    Just (name ++ ".asc")
-
-                Desc (Simple name) ->
-                    Just (name ++ ".desc")
-
-                _ ->
-                    Nothing
-    in
-        orders
-            |> List.foldr
-                (\( prefix, order ) dict ->
-                    Dict.update prefix
-                        (\m ->
-                            case m of
-                                Nothing ->
-                                    Just [ order ]
-
-                                Just os ->
-                                    Just (order :: os)
-                        )
-                        dict
-                )
-                Dict.empty
-            |> Dict.toList
-            |> List.filterMap labeledOrderToKeyValue
-
-
-offsetToKeyValue : Maybe Int -> List ( String, String )
-offsetToKeyValue maybeOffset =
-    case maybeOffset of
-        Nothing ->
-            []
-
-        Just offset ->
-            [ ( "offset", toString offset ) ]
-
-
-limitToKeyValues : Maybe Int -> List ( String, String )
-limitToKeyValues maybeLimit =
-    case maybeLimit of
-        Nothing ->
-            []
-
-        Just limit ->
-            [ ( "limit", toString limit ) ]
