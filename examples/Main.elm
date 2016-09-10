@@ -5,56 +5,70 @@ import Html.App as App
 import Http
 import Task
 import PostgRest exposing (..)
-import PostgRest.Infix exposing ((.))
+import Json.Decode as Decode
+import Debug
 
 
 session =
     schema "sessions"
-        { id = field "id"
-        , speaker_id = field "speaker_id"
-        , start_time = field "start_time"
-        , end_time = field "end_time"
-        , location = field "location"
-        , session_type = field "session_type"
+        { id = field "id" Decode.int
+        , speaker_id = field "speaker_id" Decode.int
+        , start_time = field "start_time" Decode.int
+        , end_time = field "end_time" Decode.int
+        , location = field "location" Decode.string
+        , session_type = field "session_type" Decode.int
         }
 
 
 speaker =
     schema "speakers"
-        { id = field "id"
-        , name = field "name"
-        , lineup_order = field "lineup_order"
-        , twitter = field "twitter"
-        , avatar_url = field "avatar_url"
-        , bio = field "bio"
-        , featured = field "featured"
+        { id = field "id" Decode.int
+        , name = field "name" Decode.string
+        , lineup_order = field "lineup_order" Decode.int
+        , twitter = field "twitter" Decode.int
+        , avatar_url = field "avatar_url" Decode.int
+        , bio = field "bio" Decode.int
+        , featured = field "featured" Decode.int
         }
 
 
+type alias Session =
+    { id : Int
+    , location : String
+    , speakers : Speaker
+    }
+
+
+type alias Speaker =
+    { id : Int
+    , name : String
+    }
+
+
+speakerQuery =
+    query speaker Speaker
+        |> select .id
+        |> select .name
+
+
 sessionCmd =
-    let
-        speakerQuery =
-            query speaker
-                |> select [ .id, .bio ]
-    in
-        query session
-            |> select
-                [ .id
-                , .speaker_id
-                , .start_time
-                , .location
-                , (.) speakerQuery
-                ]
-            |> filter [ .location |> not' like "%Russia%" ]
-            |> order [ desc .id ]
-            |> postgRest "http://postgrest.herokuapp.com/" PostgRest.defaultSettings
-            |> Http.send Http.defaultSettings
-            |> Task.perform FetchFail FetchSucceed
+    query session Session
+        |> select .id
+        |> select .location
+        |> include speakerQuery
+        |> filter [ .location |> like "%Russia%" ]
+        |> order [ asc .id, desc .location ]
+        |> send "http://postgrest.herokuapp.com/" PostgRest.defaultSettings
+        |> Task.perform FetchFail FetchSucceed
+
+
+
+-- ((select .id) >> (select .location) >> (include speakerQuery))
 
 
 main =
     App.program
-        { init = ( { sessions = Nothing }, sessionCmd )
+        { init = ( { sessions = [] }, sessionCmd )
         , update = update
         , view = view
         , subscriptions = \_ -> Sub.none
@@ -66,7 +80,7 @@ main =
 
 
 type alias Model =
-    { sessions : Maybe Http.Response
+    { sessions : List Session
     }
 
 
@@ -75,17 +89,17 @@ type alias Model =
 
 
 type Msg
-    = FetchSucceed Http.Response
-    | FetchFail Http.RawError
+    = FetchSucceed (List Session)
+    | FetchFail Http.Error
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         FetchSucceed sessions ->
-            ( { model | sessions = Just sessions }, Cmd.none )
+            ( { model | sessions = sessions }, Cmd.none )
 
-        FetchFail _ ->
+        FetchFail a ->
             ( model, Cmd.none )
 
 

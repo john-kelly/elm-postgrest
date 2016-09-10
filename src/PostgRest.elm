@@ -1,16 +1,18 @@
 module PostgRest
     exposing
-        ( Schema
-        , Query
+        ( field
         , Field
+        , Schema
+        , Query
+        , Select
         , OrderBy
         , Filter
         , Settings
         , defaultSettings
         , schema
-        , field
         , query
-        , subQuery
+        , include
+        , includeMany
         , select
         , order
         , filter
@@ -26,18 +28,26 @@ module PostgRest
         , not'
         , asc
         , desc
-        , postgRest
+        , send
         )
 
 {-| PostgREST Query Builder!
-@docs Schema, Query, Field, OrderBy, Filter, Settings, defaultSettings, schema, field, query, subQuery, select, order, filter, like, eq, gte, gt, lte, lt, ilike, in', is, not', asc, desc, postgRest
+@docs Schema, Query, Select, OrderBy, Filter, Settings, defaultSettings, schema, field, query, include, select, order, filter, like, eq, gte, gt, lte, lt, ilike, in', is, not', asc, desc, postgRest
 -}
 
 import Dict
 import Http
-import Json.Decode as Decode
+import Json.Decode as Decode exposing ((:=))
 import String
 import Task
+
+
+{-| https://github.com/elm-community/json-extra/blob/master/src/Json/Decode/Extra.elm#L86
+decided to just not import Json.Decode.Extra.
+-}
+apply : Decode.Decoder (a -> b) -> Decode.Decoder a -> Decode.Decoder b
+apply =
+    Decode.object2 (<|)
 
 
 {-| -}
@@ -53,34 +63,54 @@ unwrapSchema schema =
 
 
 {-| -}
-type Query s
-    = Query String s QueryParams
+type Query s r
+    = Query String s QueryParams (Decode.Decoder r)
 
 
-unwrapQuery : Query s -> ( String, s, QueryParams )
+unwrapQuery : Query s r -> ( String, s, QueryParams, Decode.Decoder r )
 unwrapQuery query =
     case query of
-        Query name shape params ->
-            ( name, shape, params )
+        Query name shape params decoder ->
+            ( name, shape, params, decoder )
+
+
+
+-- select is no longer a list of fields, we are going to have a different data
+-- type to represetn a field vs a thing to query? or something like that.
+-- basically this is the case b/c we need the field to be paramaterized but that
+-- is just not possible if we have a list of them... becuase then each one would
+-- have to be of the same type.
 
 
 type alias QueryParams =
-    { select : List Field
+    { select : List Select
     , order : List OrderBy
     , filter : List Filter
     }
 
 
 {-| -}
-type Field
+type Select
     = Simple String
     | Nested String QueryParams
 
 
+{-|
+query session Session
+    |> select .id & .location
+
+could maybe do something interesting with compound fields? or maybe it's a compound
+select? not sure.... but .id & .location could output something that could be selected on
+that represetnts both of those.
+-}
+type Field a
+    = Field String (Decode.Decoder a)
+
+
 {-| -}
 type OrderBy
-    = Asc Field
-    | Desc Field
+    = Asc String
+    | Desc String
 
 
 {-| -}
@@ -98,15 +128,29 @@ type Condition
 
 {-| -}
 type Filter
-    = Filter Bool Condition Field
+    = Filter Bool Condition String
 
 
-{-| -}
+{-| Highleve question -- how does all of this related to http settings? should http settings be
+exposed? or abstracted on top of? use cases matter here. so i think that NOT exposing might be fine
+unless people decide that they need it. makes lib easier to understand i suppose in the begginning.
+not sure tho :)
+-}
 type alias Settings =
-    { count : Bool
-    , singular : Bool
-    , limit : Maybe Int
-    , offset : Maybe Int
+    { count :
+        Bool
+        -- this can likely still just be a boolean thing.
+    , singular :
+        Bool
+        -- this needs to be to a function. maybe get vs list or retrieve?
+    , limit :
+        Maybe Int
+        -- this needs to be a query param.
+    , offset :
+        Maybe Int
+        -- not sure where to put this considering it is top level only.
+        -- i know. there is a special function called paginated that is like
+        -- send but also can add an offset or something? that might work.
     }
 
 
@@ -141,200 +185,209 @@ schema =
 
 
 {-| -}
-field : String -> Field
+field : String -> Decode.Decoder a -> Field a
 field =
-    Simple
+    Field
 
 
 {-| -}
-query : Schema s -> Query s
-query schema =
+query : Schema s -> (a -> r) -> Query s (a -> r)
+query schema recordCtor =
     let
         ( name, shape ) =
             unwrapSchema schema
     in
         Query name
             shape
-            { select = []
-            , filter = []
-            , order = []
-            }
+            { select = [], filter = [], order = [] }
+            (Decode.succeed recordCtor)
 
 
-{-| -}
-subQuery : Query s -> a -> Field
-subQuery query =
+{-| do we want query to become a field? then we can get into unrepresentatble states
+-}
+include : Query s2 a -> Query s1 (a -> b) -> Query s1 b
+include sub query =
     let
-        ( name, _, params ) =
+        ( subName, subShape, subParams, subDecoder ) =
+            unwrapQuery sub
+
+        ( queryName, queryShape, queryParams, queryDecoder ) =
             unwrapQuery query
     in
-        always <| Nested name params
+        Query queryName
+            queryShape
+            { queryParams | select = (Nested subName subParams) :: queryParams.select }
+            (apply queryDecoder (subName := subDecoder))
 
 
-{-| -}
-select : List (s -> Field) -> Query s -> Query s
-select selects query =
+includeMany : Query s2 a -> Query s1 (List a -> b) -> Query s1 b
+includeMany sub query =
     let
-        -- addSelects : s -> QueryParams -> QueryParams
-        -- https://github.com/elm-lang/elm-compiler/issues/1214
-        addSelects shape params =
-            { params
-                | select = params.select ++ List.map (\fn -> fn shape) selects
-            }
+        ( subName, subShape, subParams, subDecoder ) =
+            unwrapQuery sub
+
+        ( queryName, queryShape, queryParams, queryDecoder ) =
+            unwrapQuery query
     in
-        mapQueryParams addSelects query
+        Query queryName
+            queryShape
+            { queryParams | select = (Nested subName subParams) :: queryParams.select }
+            (apply queryDecoder (subName := Decode.list subDecoder))
 
 
 {-| -}
-order : List (s -> OrderBy) -> Query s -> Query s
+select : (s -> Field a) -> Query s (a -> b) -> Query s b
+select fieldAccessor query =
+    let
+        ( name, shape, params, decoder ) =
+            unwrapQuery query
+
+        ( n, s, d ) =
+            case fieldAccessor shape of
+                Field name decoder ->
+                    ( name, Simple name, decoder )
+    in
+        Query name
+            shape
+            { params | select = s :: params.select }
+            (apply decoder (n := d))
+
+
+{-| -}
+order : List (s -> OrderBy) -> Query s r -> Query s r
 order orders query =
     let
-        -- addOrders : s -> QueryParams -> QueryParams
-        addOrders shape params =
-            { params
-                | order = params.order ++ List.map (\fn -> fn shape) orders
-            }
+        ( name, shape, params, d ) =
+            unwrapQuery query
     in
-        mapQueryParams addOrders query
+        Query name
+            shape
+            { params | order = params.order ++ List.map (\fn -> fn shape) orders }
+            d
 
 
 {-| -}
-filter : List (s -> Filter) -> Query s -> Query s
+filter : List (s -> Filter) -> Query s r -> Query s r
 filter filters query =
     let
-        -- addFilters : s -> QueryParams -> QueryParams
-        addFilters shape params =
-            { params
-                | filter = params.filter ++ List.map (\fn -> fn shape) filters
-            }
-    in
-        mapQueryParams addFilters query
-
-
-mapQueryParams : (s -> QueryParams -> QueryParams) -> Query s -> Query s
-mapQueryParams fn query =
-    let
-        ( name, shape, params ) =
+        ( name, shape, params, d ) =
             unwrapQuery query
     in
-        Query name shape (fn shape params)
+        Query name
+            shape
+            { params | filter = params.filter ++ List.map (\fn -> fn shape) filters }
+            d
 
 
 singleValueFilterFn :
     (String -> Condition)
     -> a
-    -> (s -> Field)
-    -> (s -> Filter)
-singleValueFilterFn condCtor condArg fieldAccessor =
-    let
-        -- shapeToFilter : s -> Filter
-        shapeToFilter shape =
-            Filter False
-                (condCtor (coerceToString condArg))
-                (fieldAccessor shape)
-    in
-        shapeToFilter
+    -> (s -> Field b)
+    -> s
+    -> Filter
+singleValueFilterFn condCtor condArg attrAccessor shape =
+    case attrAccessor shape of
+        Field name _ ->
+            Filter False (condCtor (coerceToString condArg)) name
 
 
-{-| -}
-like : String -> (s -> Field) -> (s -> Filter)
+{-|
+like should only work on String Fields. very cool.
+-}
+like : String -> (s -> Field String) -> s -> Filter
 like =
     singleValueFilterFn Like
 
 
-{-| -}
-eq : a -> (s -> Field) -> (s -> Filter)
+{-|
+z and a should be the same here.
+-}
+eq : a -> (s -> Field a) -> s -> Filter
 eq =
     singleValueFilterFn Eq
 
 
 {-| -}
-gte : a -> (s -> Field) -> (s -> Filter)
+gte : a -> (s -> Field a) -> s -> Filter
 gte =
     singleValueFilterFn Gte
 
 
 {-| -}
-gt : a -> (s -> Field) -> (s -> Filter)
+gt : a -> (s -> Field a) -> s -> Filter
 gt =
     singleValueFilterFn Gt
 
 
 {-| -}
-lte : a -> (s -> Field) -> (s -> Filter)
+lte : a -> (s -> Field a) -> s -> Filter
 lte =
     singleValueFilterFn Lte
 
 
 {-| -}
-lt : a -> (s -> Field) -> (s -> Filter)
+lt : a -> (s -> Field a) -> s -> Filter
 lt =
     singleValueFilterFn Lt
 
 
 {-| -}
-ilike : String -> (s -> Field) -> (s -> Filter)
+ilike : String -> (s -> Field String) -> s -> Filter
 ilike =
     singleValueFilterFn ILike
 
 
 {-| -}
-in' : List a -> (s -> Field) -> (s -> Filter)
-in' condArgs fieldAccessor =
-    let
-        shapeToFilter shape =
-            Filter False
-                (In (List.map coerceToString condArgs))
-                (fieldAccessor shape)
-    in
-        shapeToFilter
+in' : List a -> (s -> Field a) -> s -> Filter
+in' condArgs attrAccessor shape =
+    case attrAccessor shape of
+        Field name _ ->
+            Filter False (In (List.map coerceToString condArgs)) name
 
 
 {-| -}
-is : a -> (s -> Field) -> (s -> Filter)
+is : a -> (s -> Field a) -> s -> Filter
 is =
     singleValueFilterFn Is
 
 
 {-| -}
 not' :
-    (a -> (s -> Field) -> (s -> Filter))
+    (a -> (s -> Field a) -> (s -> Filter))
     -> a
-    -> (s -> Field)
-    -> (s -> Filter)
-not' filterAccessorCtor val fieldAccessor =
-    let
-        filterAccessor =
-            filterAccessorCtor val fieldAccessor
-
-        shapeToNegatedFilter shape =
-            case filterAccessor shape of
-                Filter negated cond field ->
-                    Filter (not negated) cond field
-    in
-        shapeToNegatedFilter
+    -> (s -> Field a)
+    -> s
+    -> Filter
+not' filterAccessorCtor val fieldAccessor shape =
+    case filterAccessorCtor val fieldAccessor shape of
+        Filter negated cond fieldName ->
+            Filter (not negated) cond fieldName
 
 
 {-| -}
-asc : (s -> Field) -> (s -> OrderBy)
-asc fieldAccessor =
-    (\shape -> Asc (fieldAccessor shape))
+asc : (s -> Field a) -> s -> OrderBy
+asc fieldAccessor shape =
+    case fieldAccessor shape of
+        Field name _ ->
+            Asc name
 
 
 {-| -}
-desc : (s -> Field) -> (s -> OrderBy)
-desc fieldAccessor =
-    (\shape -> Desc (fieldAccessor shape))
+desc : (s -> Field a) -> s -> OrderBy
+desc fieldAccessor shape =
+    case fieldAccessor shape of
+        Field name _ ->
+            Desc name
 
 
 {-| -}
-postgRest : String -> Settings -> Query s -> Http.Request
+postgRest : String -> Settings -> Query s r -> Http.Request
 postgRest url settings query =
     let
         { count, singular, limit, offset } =
             settings
 
-        ( name, _, params ) =
+        ( name, _, params, _ ) =
             unwrapQuery query
 
         trailingSlashUrl =
@@ -379,10 +432,30 @@ postgRest url settings query =
         }
 
 
-fieldsToKeyValue : List Field -> List ( String, String )
+send : String -> Settings -> Query s r -> Task.Task Http.Error (List r)
+send url settings query =
+    -- may want to name this list. and the singular one get.
+    -- reason being, not sure if we are going to be able to conditionally
+    -- return either a list or just the regular decoder.
+    let
+        ( _, _, _, decoder ) =
+            unwrapQuery query
+    in
+        -- according to ~20:00 fromJson may be too limiting in terms of error
+        -- handling https://www.dailydrip.com/topics/elm/drips/server-side-validations
+        -- this is b/c you can access the body of the response when there is an
+        -- error. the solution to this in http builder is to basically just have
+        -- an error type that comes with the Response and we can read it in a
+        -- similar fashion to reading the json body.
+        postgRest url settings query
+            |> Http.send Http.defaultSettings
+            |> Http.fromJson (Decode.list decoder)
+
+
+fieldsToKeyValue : List Select -> List ( String, String )
 fieldsToKeyValue fields =
     let
-        fieldToString : Field -> String
+        fieldToString : Select -> String
         fieldToString field =
             case field of
                 Simple name ->
@@ -391,7 +464,7 @@ fieldsToKeyValue fields =
                 Nested name { select } ->
                     name ++ "{" ++ fieldsToString select ++ "}"
 
-        fieldsToString : List Field -> String
+        fieldsToString : List Select -> String
         fieldsToString fields =
             case fields of
                 [] ->
@@ -468,19 +541,16 @@ labeledFiltersToKeyValues filters =
                 Is str ->
                     "is." ++ str
 
-        filterToKeyValue : ( String, Filter ) -> Maybe ( String, String )
+        filterToKeyValue : ( String, Filter ) -> ( String, String )
         filterToKeyValue ( prefix, filter ) =
             case filter of
-                Filter True cond (Simple key) ->
-                    Just ( prefix ++ key, "not." ++ contToString cond )
+                Filter True cond key ->
+                    ( prefix ++ key, "not." ++ contToString cond )
 
-                Filter False cond (Simple key) ->
-                    Just ( prefix ++ key, contToString cond )
-
-                Filter _ _ (Nested _ _) ->
-                    Nothing
+                Filter False cond key ->
+                    ( prefix ++ key, contToString cond )
     in
-        List.filterMap filterToKeyValue filters
+        List.map filterToKeyValue filters
 
 
 labelOrders : String -> QueryParams -> List ( String, OrderBy )
@@ -521,28 +591,25 @@ labeledOrdersToKeyValue orders =
                     Just
                         ( prefix ++ "order"
                         , orders
-                            |> List.filterMap orderToString
+                            |> List.map orderToString
                             |> String.join ","
                         )
 
-        orderToString : OrderBy -> Maybe String
+        orderToString : OrderBy -> String
         orderToString order =
             case order of
-                Asc (Simple name) ->
-                    Just (name ++ ".asc")
+                Asc name ->
+                    name ++ ".asc"
 
-                Desc (Simple name) ->
-                    Just (name ++ ".desc")
-
-                _ ->
-                    Nothing
+                Desc name ->
+                    name ++ ".desc"
     in
         orders
             |> List.foldr
                 (\( prefix, order ) dict ->
                     Dict.update prefix
-                        (\m ->
-                            case m of
+                        (\maybeOrders ->
+                            case maybeOrders of
                                 Nothing ->
                                     Just [ order ]
 
