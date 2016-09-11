@@ -28,7 +28,7 @@ module PostgRest
         , not'
         , asc
         , desc
-        , send
+        , list
         )
 
 {-| PostgREST Query Builder!
@@ -143,9 +143,6 @@ type alias Settings =
     , singular :
         Bool
         -- this needs to be to a function. maybe get vs list or retrieve?
-    , limit :
-        Maybe Int
-        -- this needs to be a query param.
     , offset :
         Maybe Int
         -- not sure where to put this considering it is top level only.
@@ -159,7 +156,6 @@ defaultSettings : Settings
 defaultSettings =
     { count = False
     , singular = False
-    , limit = Nothing
     , offset = Nothing
     }
 
@@ -203,7 +199,9 @@ query schema recordCtor =
             (Decode.succeed recordCtor)
 
 
-{-| do we want query to become a field? then we can get into unrepresentatble states
+{-| I have decided to NOT make nested queries into fields. If we allow queries
+to be fields then an impossible state is representable (a filter of a nested field.)
+
 -}
 include : Query s2 a -> Query s1 (a -> b) -> Query s1 b
 include sub query =
@@ -291,17 +289,13 @@ singleValueFilterFn condCtor condArg attrAccessor shape =
             Filter False (condCtor (coerceToString condArg)) name
 
 
-{-|
-like should only work on String Fields. very cool.
--}
+{-| -}
 like : String -> (s -> Field String) -> s -> Filter
 like =
     singleValueFilterFn Like
 
 
-{-|
-z and a should be the same here.
--}
+{-| -}
 eq : a -> (s -> Field a) -> s -> Filter
 eq =
     singleValueFilterFn Eq
@@ -381,10 +375,42 @@ desc fieldAccessor shape =
 
 
 {-| -}
+list : String -> Settings -> Query s r -> Task.Task Http.Error (List r)
+list url settings query =
+    -- may want to name this list. and the singular one get.
+    -- reason being, not sure if we are going to be able to conditionally
+    -- return either a list or just the regular decoder.
+    let
+        ( _, _, _, decoder ) =
+            unwrapQuery query
+    in
+        -- according to ~20:00 fromJson may be too limiting in terms of error
+        -- handling https://www.dailydrip.com/topics/elm/drips/server-side-validations
+        -- this is b/c you can access the body of the response when there is an
+        -- error. the solution to this in http builder is to basically just have
+        -- an error type that comes with the Response and we can read it in a
+        -- similar fashion to reading the json body.
+        postgRest url settings query
+            |> Http.send Http.defaultSettings
+            |> Http.fromJson (Decode.list decoder)
+
+
+{-| -}
+retrieve : String -> Settings -> Query s r -> Task.Task Http.Error r
+retrieve url settings query =
+    let
+        ( _, _, _, decoder ) =
+            unwrapQuery query
+    in
+        postgRest url settings query
+            |> Http.send Http.defaultSettings
+            |> Http.fromJson decoder
+
+
 postgRest : String -> Settings -> Query s r -> Http.Request
 postgRest url settings query =
     let
-        { count, singular, limit, offset } =
+        { count, singular, offset } =
             settings
 
         ( name, _, params, _ ) =
@@ -405,7 +431,8 @@ postgRest url settings query =
                 |> labelFilters ""
                 |> labeledFiltersToKeyValues
             , offsetToKeyValue offset
-            , limitToKeyValues limit
+            , limitToKeyValues Nothing
+              -- TODO
             ]
                 |> List.foldl (++) []
                 |> Http.url (trailingSlashUrl ++ name)
@@ -430,26 +457,6 @@ postgRest url settings query =
         , url = queryUrl
         , body = Http.empty
         }
-
-
-send : String -> Settings -> Query s r -> Task.Task Http.Error (List r)
-send url settings query =
-    -- may want to name this list. and the singular one get.
-    -- reason being, not sure if we are going to be able to conditionally
-    -- return either a list or just the regular decoder.
-    let
-        ( _, _, _, decoder ) =
-            unwrapQuery query
-    in
-        -- according to ~20:00 fromJson may be too limiting in terms of error
-        -- handling https://www.dailydrip.com/topics/elm/drips/server-side-validations
-        -- this is b/c you can access the body of the response when there is an
-        -- error. the solution to this in http builder is to basically just have
-        -- an error type that comes with the Response and we can read it in a
-        -- similar fashion to reading the json body.
-        postgRest url settings query
-            |> Http.send Http.defaultSettings
-            |> Http.fromJson (Decode.list decoder)
 
 
 fieldsToKeyValue : List Select -> List ( String, String )
