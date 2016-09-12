@@ -7,8 +7,6 @@ module PostgRest
         , Select
         , OrderBy
         , Filter
-        , Settings
-        , defaultSettings
         , schema
         , query
         , include
@@ -32,7 +30,7 @@ module PostgRest
         )
 
 {-| PostgREST Query Builder!
-@docs Schema, Query, Select, OrderBy, Filter, Settings, defaultSettings, schema, field, query, include, select, order, filter, like, eq, gte, gt, lte, lt, ilike, in', is, not', asc, desc, postgRest
+@docs Schema, Query, Select, OrderBy, Filter, schema, field, query, include, select, order, filter, like, eq, gte, gt, lte, lt, ilike, in', is, not', asc, desc, postgRest
 -}
 
 import Dict
@@ -80,12 +78,26 @@ unwrapQuery query =
 -- basically this is the case b/c we need the field to be paramaterized but that
 -- is just not possible if we have a list of them... becuase then each one would
 -- have to be of the same type.
+--
+-- NOTE: HMM...
+-- we could choose to NOT expose a limit setter.
+-- query pokemon
+--      |> limit 10
+--      |> limit 3
+--      |> limit 1
+-- that just does not make much sense and it can override old stuff.
+-- i dont like that. im not sure if it is actually a problem. i think it's fine
+-- for now tho.
+-- instead we could have the includeMany and the list functions just take how
+-- many the user wants to limit by. i think that i like this b/c then there is
+-- never confusion with the paginate api overwriting things
 
 
 type alias QueryParams =
     { select : List Select
     , order : List OrderBy
     , filter : List Filter
+    , limit : Maybe Int
     }
 
 
@@ -131,35 +143,6 @@ type Filter
     = Filter Bool Condition String
 
 
-{-| Highleve question -- how does all of this related to http settings? should http settings be
-exposed? or abstracted on top of? use cases matter here. so i think that NOT exposing might be fine
-unless people decide that they need it. makes lib easier to understand i suppose in the begginning.
-not sure tho :)
--}
-type alias Settings =
-    { count :
-        Bool
-        -- this can likely still just be a boolean thing.
-    , singular :
-        Bool
-        -- this needs to be to a function. maybe get vs list or retrieve?
-    , offset :
-        Maybe Int
-        -- not sure where to put this considering it is top level only.
-        -- i know. there is a special function called paginated that is like
-        -- send but also can add an offset or something? that might work.
-    }
-
-
-{-| -}
-defaultSettings : Settings
-defaultSettings =
-    { count = False
-    , singular = False
-    , offset = Nothing
-    }
-
-
 {-| thanks lukewestby
 https://github.com/elm-lang/core/issues/657
 -}
@@ -195,7 +178,7 @@ query schema recordCtor =
     in
         Query name
             shape
-            { select = [], filter = [], order = [] }
+            { select = [], filter = [], order = [], limit = Nothing }
             (Decode.succeed recordCtor)
 
 
@@ -206,30 +189,36 @@ to be fields then an impossible state is representable (a filter of a nested fie
 include : Query s2 a -> Query s1 (a -> b) -> Query s1 b
 include sub query =
     let
+        ( queryName, queryShape, queryParams, queryDecoder ) =
+            unwrapQuery query
+
         ( subName, subShape, subParams, subDecoder ) =
             unwrapQuery sub
 
-        ( queryName, queryShape, queryParams, queryDecoder ) =
-            unwrapQuery query
+        nestedField =
+            Nested subName subParams
     in
         Query queryName
             queryShape
-            { queryParams | select = (Nested subName subParams) :: queryParams.select }
+            { queryParams | select = nestedField :: queryParams.select }
             (apply queryDecoder (subName := subDecoder))
 
 
-includeMany : Query s2 a -> Query s1 (List a -> b) -> Query s1 b
-includeMany sub query =
+includeMany : Maybe Int -> Query s2 a -> Query s1 (List a -> b) -> Query s1 b
+includeMany limit sub query =
     let
+        ( queryName, queryShape, queryParams, queryDecoder ) =
+            unwrapQuery query
+
         ( subName, subShape, subParams, subDecoder ) =
             unwrapQuery sub
 
-        ( queryName, queryShape, queryParams, queryDecoder ) =
-            unwrapQuery query
+        nestedField =
+            Nested subName { subParams | limit = limit }
     in
         Query queryName
             queryShape
-            { queryParams | select = (Nested subName subParams) :: queryParams.select }
+            { queryParams | select = nestedField :: queryParams.select }
             (apply queryDecoder (subName := Decode.list subDecoder))
 
 
@@ -375,14 +364,20 @@ desc fieldAccessor shape =
 
 
 {-| -}
-list : String -> Settings -> Query s r -> Task.Task Http.Error (List r)
-list url settings query =
-    -- may want to name this list. and the singular one get.
-    -- reason being, not sure if we are going to be able to conditionally
-    -- return either a list or just the regular decoder.
+list : Maybe Int -> String -> Query s r -> Task.Task Http.Error (List r)
+list limit url query =
     let
-        ( _, _, _, decoder ) =
+        ( name, shape, params, decoder ) =
             unwrapQuery query
+
+        limitedQuery =
+            Query name shape { params | limit = limit } decoder
+
+        settings =
+            { count = False
+            , singular = False
+            , offset = Nothing
+            }
     in
         -- according to ~20:00 fromJson may be too limiting in terms of error
         -- handling https://www.dailydrip.com/topics/elm/drips/server-side-validations
@@ -390,25 +385,61 @@ list url settings query =
         -- error. the solution to this in http builder is to basically just have
         -- an error type that comes with the Response and we can read it in a
         -- similar fashion to reading the json body.
-        postgRest url settings query
+        postgRest settings url limitedQuery
             |> Http.send Http.defaultSettings
             |> Http.fromJson (Decode.list decoder)
 
 
 {-| -}
-retrieve : String -> Settings -> Query s r -> Task.Task Http.Error r
-retrieve url settings query =
+retrieve : String -> Query s r -> Task.Task Http.Error r
+retrieve url query =
     let
         ( _, _, _, decoder ) =
             unwrapQuery query
+
+        settings =
+            { count = False
+            , singular = True
+            , offset = Nothing
+            }
     in
-        postgRest url settings query
+        postgRest settings url query
             |> Http.send Http.defaultSettings
             |> Http.fromJson decoder
 
 
-postgRest : String -> Settings -> Query s r -> Http.Request
-postgRest url settings query =
+{-| TODO need to change the shape of the response to resemble a page! (include count and page number and such)
+-- maybe even a url to the next page? that might be cool.
+-}
+paginate : String -> Int -> Int -> Query s r -> Task.Task Http.Error (List r)
+paginate url pageNumber pageSize query =
+    let
+        ( name, shape, params, decoder ) =
+            unwrapQuery query
+
+        limitedQuery =
+            Query name shape { params | limit = Just pageSize } decoder
+
+        settings =
+            { count = True
+            , singular = False
+            , offset = Just (pageNumber * pageSize)
+            }
+    in
+        postgRest settings url query
+            |> Http.send Http.defaultSettings
+            |> Http.fromJson (Decode.list decoder)
+
+
+type alias Settings =
+    { count : Bool
+    , singular : Bool
+    , offset : Maybe Int
+    }
+
+
+postgRest : Settings -> String -> Query s r -> Http.Request
+postgRest settings url query =
     let
         { count, singular, offset } =
             settings
@@ -431,8 +462,8 @@ postgRest url settings query =
                 |> labelFilters ""
                 |> labeledFiltersToKeyValues
             , offsetToKeyValue offset
-            , limitToKeyValues Nothing
-              -- TODO
+            , limitToKeyValues params.limit
+              -- TODO need to run this on nested as well.
             ]
                 |> List.foldl (++) []
                 |> Http.url (trailingSlashUrl ++ name)

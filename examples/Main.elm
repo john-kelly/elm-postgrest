@@ -58,7 +58,7 @@ sessionCmd =
         |> include speakerQuery
         |> filter [ .location |> like "%Russia%" ]
         |> order [ asc .id, desc .location ]
-        |> list "http://postgrest.herokuapp.com/" PostgRest.defaultSettings
+        |> list Nothing "http://postgrest.herokuapp.com/"
         |> Task.perform FetchFail FetchSucceed
 
 
