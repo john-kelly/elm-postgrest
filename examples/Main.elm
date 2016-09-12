@@ -56,9 +56,7 @@ sessionCmd =
         |> select .id
         |> select .location
         |> include speakerQuery
-        |> filter [ .location |> like "%Russia%" ]
-        |> order [ asc .id, desc .location ]
-        |> list Nothing "http://postgrest.herokuapp.com/"
+        |> retrieve "http://postgrest.herokuapp.com/"
         |> Task.perform FetchFail FetchSucceed
 
 
@@ -68,7 +66,7 @@ sessionCmd =
 
 main =
     App.program
-        { init = ( { sessions = [] }, sessionCmd )
+        { init = ( { sessions = Nothing }, sessionCmd )
         , update = update
         , view = view
         , subscriptions = \_ -> Sub.none
@@ -80,7 +78,7 @@ main =
 
 
 type alias Model =
-    { sessions : List Session
+    { sessions : Maybe Session
     }
 
 
@@ -89,7 +87,7 @@ type alias Model =
 
 
 type Msg
-    = FetchSucceed (List Session)
+    = FetchSucceed Session
     | FetchFail Http.Error
 
 
@@ -97,10 +95,14 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         FetchSucceed sessions ->
-            ( { model | sessions = sessions }, Cmd.none )
+            ( { model | sessions = Just sessions }, Cmd.none )
 
         FetchFail a ->
-            ( model, Cmd.none )
+            let
+                _ =
+                    Debug.log "hell" a
+            in
+                ( model, Cmd.none )
 
 
 

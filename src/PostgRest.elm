@@ -27,6 +27,7 @@ module PostgRest
         , asc
         , desc
         , list
+        , retrieve
         )
 
 {-| PostgREST Query Builder!
@@ -475,8 +476,9 @@ postgRest settings url query =
                 []
 
         countHeader =
-            if not count then
-                [ ( "Prefer", "count=none" ) ]
+            if count then
+                -- https://github.com/begriffs/postgrest/pull/700
+                [ ( "Prefer", "count=exact" ) ]
             else
                 []
 
