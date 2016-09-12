@@ -456,15 +456,10 @@ postgRest settings url query =
 
         queryUrl =
             [ fieldsToKeyValue params.select
-            , params
-                |> labelOrders ""
-                |> labeledOrdersToKeyValue
-            , params
-                |> labelFilters ""
-                |> labeledFiltersToKeyValues
+            , filterKeyValues params
+            , orderKeyValues params
+            , limitKeyValues params
             , offsetToKeyValue offset
-            , limitToKeyValues params.limit
-              -- TODO need to run this on nested as well.
             ]
                 |> List.foldl (++) []
                 |> Http.url (trailingSlashUrl ++ name)
@@ -521,6 +516,35 @@ fieldsToKeyValue fields =
 
             _ ->
                 [ ( "select", fieldsToString fields ) ]
+
+
+filterKeyValues : QueryParams -> List ( String, String )
+filterKeyValues params =
+    params
+        |> labelFilters ""
+        |> labeledFiltersToKeyValues
+
+
+orderKeyValues : QueryParams -> List ( String, String )
+orderKeyValues params =
+    params
+        |> labelOrders ""
+        |> labeledOrdersToKeyValue
+
+
+offsetToKeyValue : Maybe Int -> List ( String, String )
+offsetToKeyValue maybeOffset =
+    case maybeOffset of
+        Nothing ->
+            []
+
+        Just offset ->
+            [ ( "offset", toString offset ) ]
+
+
+limitKeyValues : QueryParams -> List ( String, String )
+limitKeyValues params =
+    labelLimits "limit" params
 
 
 labelFilters : String -> QueryParams -> List ( String, Filter )
@@ -663,21 +687,31 @@ labeledOrdersToKeyValue orders =
             |> List.filterMap labeledOrderToKeyValue
 
 
-offsetToKeyValue : Maybe Int -> List ( String, String )
-offsetToKeyValue maybeOffset =
-    case maybeOffset of
-        Nothing ->
-            []
+labelLimits : String -> QueryParams -> List ( String, String )
+labelLimits prefix params =
+    let
+        labelWithPrefix =
+            (,) prefix
 
-        Just offset ->
-            [ ( "offset", toString offset ) ]
+        labeledLimit =
+            case params.limit of
+                Nothing ->
+                    []
 
+                Just limit ->
+                    [ ( prefix, toString limit ) ]
 
-limitToKeyValues : Maybe Int -> List ( String, String )
-limitToKeyValues maybeLimit =
-    case maybeLimit of
-        Nothing ->
-            []
+        labelNestedLimits field =
+            case field of
+                Simple _ ->
+                    Nothing
 
-        Just limit ->
-            [ ( "limit", toString limit ) ]
+                Nested nestedName nestedParams ->
+                    Just (labelLimits (prefix ++ nestedName ++ ".") nestedParams)
+
+        labeledNestedLimits =
+            params.select
+                |> List.filterMap labelNestedLimits
+                |> List.concat
+    in
+        labeledLimit ++ labeledNestedLimits

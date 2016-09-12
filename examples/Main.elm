@@ -34,29 +34,27 @@ speaker =
 
 type alias Session =
     { id : Int
-    , location : String
-    , speakers : Speaker
     }
 
 
 type alias Speaker =
     { id : Int
     , name : String
+    , sessions : List Session
     }
 
 
-speakerQuery =
+sessionQuery =
+    query session Session
+        |> select .id
+
+
+speakerCmd =
     query speaker Speaker
         |> select .id
         |> select .name
-
-
-sessionCmd =
-    query session Session
-        |> select .id
-        |> select .location
-        |> include speakerQuery
-        |> retrieve "http://postgrest.herokuapp.com/"
+        |> includeMany Nothing sessionQuery
+        |> list Nothing "http://postgrest.herokuapp.com/"
         |> Task.perform FetchFail FetchSucceed
 
 
@@ -66,7 +64,7 @@ sessionCmd =
 
 main =
     App.program
-        { init = ( { sessions = Nothing }, sessionCmd )
+        { init = ( { speakers = [] }, speakerCmd )
         , update = update
         , view = view
         , subscriptions = \_ -> Sub.none
@@ -78,7 +76,7 @@ main =
 
 
 type alias Model =
-    { sessions : Maybe Session
+    { speakers : List Speaker
     }
 
 
@@ -87,15 +85,15 @@ type alias Model =
 
 
 type Msg
-    = FetchSucceed Session
+    = FetchSucceed (List Speaker)
     | FetchFail Http.Error
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        FetchSucceed sessions ->
-            ( { model | sessions = Just sessions }, Cmd.none )
+        FetchSucceed speakers ->
+            ( { model | speakers = speakers }, Cmd.none )
 
         FetchFail a ->
             let
@@ -110,5 +108,5 @@ update msg model =
 
 
 view : Model -> Html Msg
-view { sessions } =
-    toString sessions |> text
+view { speakers } =
+    toString speakers |> text
