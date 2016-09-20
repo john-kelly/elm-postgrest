@@ -2,12 +2,12 @@ module PostgRest
     exposing
         ( field
         , Field
-        , Schema
+        , Resource
         , Query
         , Select
         , OrderBy
         , Filter
-        , schema
+        , resource
         , query
         , include
         , includeMany
@@ -31,7 +31,7 @@ module PostgRest
         )
 
 {-| PostgREST Query Builder!
-@docs Schema, Query, Select, OrderBy, Filter, schema, field, query, include, select, order, filter, like, eq, gte, gt, lte, lt, ilike, in', is, not', asc, desc, postgRest
+@docs Resource, Query, Select, OrderBy, Filter, resource, field, query, include, select, order, filter, like, eq, gte, gt, lte, lt, ilike, in', is, not', asc, desc, postgRest
 -}
 
 import Dict
@@ -50,15 +50,20 @@ apply =
 
 
 {-| -}
-type Schema s
-    = Schema String s
+type Resource shape
+    = Resource String shape
 
 
-unwrapSchema : Schema s -> ( String, s )
-unwrapSchema schema =
-    case schema of
-        Schema name shape ->
+unwrapResource : Resource s -> ( String, s )
+unwrapResource resource =
+    case resource of
+        Resource name shape ->
             ( name, shape )
+
+
+
+-- nested fields? is that something that we want to supports? easy to represent the nested decoder i guess...
+-- how to do this?
 
 
 {-| -}
@@ -159,9 +164,9 @@ coerceToString value =
 
 
 {-| -}
-schema : String -> s -> Schema s
-schema =
-    Schema
+resource : String -> s -> Resource s
+resource =
+    Resource
 
 
 {-| -}
@@ -171,11 +176,11 @@ field =
 
 
 {-| -}
-query : Schema s -> (a -> r) -> Query s (a -> r)
-query schema recordCtor =
+query : Resource s -> (a -> r) -> Query s (a -> r)
+query resource recordCtor =
     let
         ( name, shape ) =
-            unwrapSchema schema
+            unwrapResource resource
     in
         Query name
             shape
@@ -364,7 +369,8 @@ desc fieldAccessor shape =
             Desc name
 
 
-{-| -}
+{-| http://www.django-rest-framework.org/api-guide/generic-views/#retrieveupdateapiview
+-}
 list : Maybe Int -> String -> Query s r -> Task.Task Http.Error (List r)
 list limit url query =
     let
@@ -454,11 +460,14 @@ postgRest settings url query =
             else
                 url ++ "/"
 
+        ( labeledOrders, labeledFilters, labeledLimits ) =
+            labelParams "" params
+
         queryUrl =
-            [ fieldsToKeyValue params.select
-            , filterKeyValues params
-            , orderKeyValues params
-            , limitKeyValues params
+            [ selectsToKeyValue params.select
+            , labeledFiltersToKeyValues labeledFilters
+            , labeledOrdersToKeyValue labeledOrders
+            , labeledLimitsToKeyValue labeledLimits
             , offsetToKeyValue offset
             ]
                 |> List.foldl (++) []
@@ -487,27 +496,27 @@ postgRest settings url query =
         }
 
 
-fieldsToKeyValue : List Select -> List ( String, String )
-fieldsToKeyValue fields =
+selectsToKeyValue : List Select -> List ( String, String )
+selectsToKeyValue fields =
     let
-        fieldToString : Select -> String
-        fieldToString field =
+        selectToString : Select -> String
+        selectToString field =
             case field of
                 Simple name ->
                     name
 
                 Nested name { select } ->
-                    name ++ "{" ++ fieldsToString select ++ "}"
+                    name ++ "{" ++ selectsToString select ++ "}"
 
-        fieldsToString : List Select -> String
-        fieldsToString fields =
+        selectsToString : List Select -> String
+        selectsToString fields =
             case fields of
                 [] ->
                     "*"
 
                 _ ->
                     fields
-                        |> List.map fieldToString
+                        |> List.map selectToString
                         |> String.join ","
     in
         case fields of
@@ -515,21 +524,7 @@ fieldsToKeyValue fields =
                 []
 
             _ ->
-                [ ( "select", fieldsToString fields ) ]
-
-
-filterKeyValues : QueryParams -> List ( String, String )
-filterKeyValues params =
-    params
-        |> labelFilters ""
-        |> labeledFiltersToKeyValues
-
-
-orderKeyValues : QueryParams -> List ( String, String )
-orderKeyValues params =
-    params
-        |> labelOrders ""
-        |> labeledOrdersToKeyValue
+                [ ( "select", selectsToString fields ) ]
 
 
 offsetToKeyValue : Maybe Int -> List ( String, String )
@@ -542,34 +537,45 @@ offsetToKeyValue maybeOffset =
             [ ( "offset", toString offset ) ]
 
 
-limitKeyValues : QueryParams -> List ( String, String )
-limitKeyValues params =
-    labelLimits "limit" params
-
-
-labelFilters : String -> QueryParams -> List ( String, Filter )
-labelFilters prefix params =
+labelParams : String -> QueryParams -> ( List ( String, OrderBy ), List ( String, Filter ), List ( String, Maybe Int ) )
+labelParams prefix params =
+    -- if you squint your eyes, this is performing a concat map of sorts on the QueryParams
     let
+        labelWithPrefix : a -> ( String, a )
         labelWithPrefix =
             (,) prefix
 
-        labeledFilters =
-            List.map labelWithPrefix params.filter
-
-        labelNestedFilters field =
+        labelNested : Select -> Maybe ( List ( String, OrderBy ), List ( String, Filter ), List ( String, Maybe Int ) )
+        labelNested field =
             case field of
                 Simple _ ->
                     Nothing
 
                 Nested nestedName nestedParams ->
-                    Just (labelFilters (prefix ++ nestedName ++ ".") nestedParams)
+                    Just (labelParams (prefix ++ nestedName ++ ".") nestedParams)
 
-        labeledNestedFilters =
-            params.select
-                |> List.filterMap labelNestedFilters
-                |> List.concat
+        appendTriples :
+            ( appendable, appendable', appendable'' )
+            -> ( appendable, appendable', appendable'' )
+            -> ( appendable, appendable', appendable'' )
+        appendTriples ( os1, fs1, ls1 ) ( os2, fs2, ls2 ) =
+            ( os1 ++ os2, fs1 ++ fs2, ls1 ++ ls2 )
+
+        labeledOrders : List ( String, OrderBy )
+        labeledOrders =
+            List.map labelWithPrefix params.order
+
+        labeledFilters : List ( String, Filter )
+        labeledFilters =
+            List.map labelWithPrefix params.filter
+
+        labeledLimit : List ( String, Maybe Int )
+        labeledLimit =
+            [ labelWithPrefix params.limit ]
     in
-        labeledFilters ++ labeledNestedFilters
+        params.select
+            |> List.filterMap labelNested
+            |> List.foldl appendTriples ( labeledOrders, labeledFilters, labeledLimit )
 
 
 labeledFiltersToKeyValues : List ( String, Filter ) -> List ( String, String )
@@ -617,34 +623,18 @@ labeledFiltersToKeyValues filters =
         List.map filterToKeyValue filters
 
 
-labelOrders : String -> QueryParams -> List ( String, OrderBy )
-labelOrders prefix params =
-    let
-        labelWithPrefix =
-            (,) prefix
-
-        labeledOrders =
-            List.map labelWithPrefix params.order
-
-        labelNestedOrders field =
-            case field of
-                Simple _ ->
-                    Nothing
-
-                Nested nestedName nestedParams ->
-                    Just (labelOrders (prefix ++ nestedName ++ ".") nestedParams)
-
-        labeledNestedOrders =
-            params.select
-                |> List.filterMap labelNestedOrders
-                |> List.concat
-    in
-        labeledOrders ++ labeledNestedOrders
-
-
 labeledOrdersToKeyValue : List ( String, OrderBy ) -> List ( String, String )
 labeledOrdersToKeyValue orders =
     let
+        orderToString : OrderBy -> String
+        orderToString order =
+            case order of
+                Asc name ->
+                    name ++ ".asc"
+
+                Desc name ->
+                    name ++ ".desc"
+
         labeledOrderToKeyValue : ( String, List OrderBy ) -> Maybe ( String, String )
         labeledOrderToKeyValue ( prefix, orders ) =
             case orders of
@@ -658,15 +648,6 @@ labeledOrdersToKeyValue orders =
                             |> List.map orderToString
                             |> String.join ","
                         )
-
-        orderToString : OrderBy -> String
-        orderToString order =
-            case order of
-                Asc name ->
-                    name ++ ".asc"
-
-                Desc name ->
-                    name ++ ".desc"
     in
         orders
             |> List.foldr
@@ -687,31 +668,16 @@ labeledOrdersToKeyValue orders =
             |> List.filterMap labeledOrderToKeyValue
 
 
-labelLimits : String -> QueryParams -> List ( String, String )
-labelLimits prefix params =
+labeledLimitsToKeyValue : List ( String, Maybe Int ) -> List ( String, String )
+labeledLimitsToKeyValue limits =
     let
-        labelWithPrefix =
-            (,) prefix
-
-        labeledLimit =
-            case params.limit of
-                Nothing ->
-                    []
-
-                Just limit ->
-                    [ ( prefix, toString limit ) ]
-
-        labelNestedLimits field =
-            case field of
-                Simple _ ->
+        toKeyValue : ( String, Maybe Int ) -> Maybe ( String, String )
+        toKeyValue labeledLimit =
+            case labeledLimit of
+                ( _, Nothing ) ->
                     Nothing
 
-                Nested nestedName nestedParams ->
-                    Just (labelLimits (prefix ++ nestedName ++ ".") nestedParams)
-
-        labeledNestedLimits =
-            params.select
-                |> List.filterMap labelNestedLimits
-                |> List.concat
+                ( prefix, Just limit ) ->
+                    Just ( "limit" ++ prefix, toString limit )
     in
-        labeledLimit ++ labeledNestedLimits
+        List.filterMap toKeyValue limits
