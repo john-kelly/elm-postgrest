@@ -61,11 +61,6 @@ unwrapResource resource =
             ( name, shape )
 
 
-
--- nested fields? is that something that we want to supports? easy to represent the nested decoder i guess...
--- how to do this?
-
-
 {-| -}
 type Query s r
     = Query String s QueryParams (Decode.Decoder r)
@@ -76,27 +71,6 @@ unwrapQuery query =
     case query of
         Query name shape params decoder ->
             ( name, shape, params, decoder )
-
-
-
--- select is no longer a list of fields, we are going to have a different data
--- type to represetn a field vs a thing to query? or something like that.
--- basically this is the case b/c we need the field to be paramaterized but that
--- is just not possible if we have a list of them... becuase then each one would
--- have to be of the same type.
---
--- NOTE: HMM...
--- we could choose to NOT expose a limit setter.
--- query pokemon
---      |> limit 10
---      |> limit 3
---      |> limit 1
--- that just does not make much sense and it can override old stuff.
--- i dont like that. im not sure if it is actually a problem. i think it's fine
--- for now tho.
--- instead we could have the includeMany and the list functions just take how
--- many the user wants to limit by. i think that i like this b/c then there is
--- never confusion with the paginate api overwriting things
 
 
 type alias QueryParams =
@@ -113,7 +87,7 @@ type Select
     | Nested String QueryParams
 
 
-{-|
+{-| TODO
 query session Session
     |> select .id & .location
 
@@ -188,10 +162,7 @@ query resource recordCtor =
             (Decode.succeed recordCtor)
 
 
-{-| I have decided to NOT make nested queries into fields. If we allow queries
-to be fields then an impossible state is representable (a filter of a nested field.)
-
--}
+{-| -}
 include : Query s2 a -> Query s1 (a -> b) -> Query s1 b
 include sub query =
     let
@@ -210,6 +181,7 @@ include sub query =
             (apply queryDecoder (subName := subDecoder))
 
 
+{-| -}
 includeMany : Maybe Int -> Query s2 a -> Query s1 (List a -> b) -> Query s1 b
 includeMany limit sub query =
     let
@@ -272,12 +244,7 @@ filter filters query =
             d
 
 
-singleValueFilterFn :
-    (String -> Condition)
-    -> a
-    -> (s -> Field b)
-    -> s
-    -> Filter
+singleValueFilterFn : (String -> Condition) -> a -> (s -> Field b) -> s -> Filter
 singleValueFilterFn condCtor condArg attrAccessor shape =
     case attrAccessor shape of
         Field name _ ->
@@ -386,6 +353,7 @@ list limit url query =
             , offset = Nothing
             }
     in
+        -- TODO
         -- according to ~20:00 fromJson may be too limiting in terms of error
         -- handling https://www.dailydrip.com/topics/elm/drips/server-side-validations
         -- this is b/c you can access the body of the response when there is an
