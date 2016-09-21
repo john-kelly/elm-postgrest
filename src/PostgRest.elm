@@ -54,23 +54,9 @@ type Resource shape
     = Resource String shape
 
 
-unwrapResource : Resource s -> ( String, s )
-unwrapResource resource =
-    case resource of
-        Resource name shape ->
-            ( name, shape )
-
-
 {-| -}
 type Query s r
     = Query String s QueryParams (Decode.Decoder r)
-
-
-unwrapQuery : Query s r -> ( String, s, QueryParams, Decode.Decoder r )
-unwrapQuery query =
-    case query of
-        Query name shape params decoder ->
-            ( name, shape, params, decoder )
 
 
 type alias QueryParams =
@@ -151,27 +137,17 @@ field =
 
 {-| -}
 query : Resource s -> (a -> r) -> Query s (a -> r)
-query resource recordCtor =
-    let
-        ( name, shape ) =
-            unwrapResource resource
-    in
-        Query name
-            shape
-            { select = [], filter = [], order = [], limit = Nothing }
-            (Decode.succeed recordCtor)
+query (Resource name shape) recordCtor =
+    Query name
+        shape
+        { select = [], filter = [], order = [], limit = Nothing }
+        (Decode.succeed recordCtor)
 
 
 {-| -}
 include : Query s2 a -> Query s1 (a -> b) -> Query s1 b
-include sub query =
+include (Query subName subShape subParams subDecoder) (Query queryName queryShape queryParams queryDecoder) =
     let
-        ( queryName, queryShape, queryParams, queryDecoder ) =
-            unwrapQuery query
-
-        ( subName, subShape, subParams, subDecoder ) =
-            unwrapQuery sub
-
         nestedField =
             Nested subName subParams
     in
@@ -183,14 +159,8 @@ include sub query =
 
 {-| -}
 includeMany : Maybe Int -> Query s2 a -> Query s1 (List a -> b) -> Query s1 b
-includeMany limit sub query =
+includeMany limit (Query subName subShape subParams subDecoder) (Query queryName queryShape queryParams queryDecoder) =
     let
-        ( queryName, queryShape, queryParams, queryDecoder ) =
-            unwrapQuery query
-
-        ( subName, subShape, subParams, subDecoder ) =
-            unwrapQuery sub
-
         nestedField =
             Nested subName { subParams | limit = limit }
     in
@@ -202,11 +172,8 @@ includeMany limit sub query =
 
 {-| -}
 select : (s -> Field a) -> Query s (a -> b) -> Query s b
-select fieldAccessor query =
+select fieldAccessor (Query name shape params decoder) =
     let
-        ( name, shape, params, decoder ) =
-            unwrapQuery query
-
         ( n, s, d ) =
             case fieldAccessor shape of
                 Field name decoder ->
@@ -220,28 +187,20 @@ select fieldAccessor query =
 
 {-| -}
 order : List (s -> OrderBy) -> Query s r -> Query s r
-order orders query =
-    let
-        ( name, shape, params, d ) =
-            unwrapQuery query
-    in
-        Query name
-            shape
-            { params | order = params.order ++ List.map (\fn -> fn shape) orders }
-            d
+order orders (Query name shape params decoder) =
+    Query name
+        shape
+        { params | order = params.order ++ List.map (\fn -> fn shape) orders }
+        decoder
 
 
 {-| -}
 filter : List (s -> Filter) -> Query s r -> Query s r
-filter filters query =
-    let
-        ( name, shape, params, d ) =
-            unwrapQuery query
-    in
-        Query name
-            shape
-            { params | filter = params.filter ++ List.map (\fn -> fn shape) filters }
-            d
+filter filters (Query name shape params decoder) =
+    Query name
+        shape
+        { params | filter = params.filter ++ List.map (\fn -> fn shape) filters }
+        decoder
 
 
 singleValueFilterFn : (String -> Condition) -> a -> (s -> Field b) -> s -> Filter
@@ -339,14 +298,8 @@ desc fieldAccessor shape =
 {-| http://www.django-rest-framework.org/api-guide/generic-views/#retrieveupdateapiview
 -}
 list : Maybe Int -> String -> Query s r -> Task.Task Http.Error (List r)
-list limit url query =
+list limit url (Query name _ params decoder) =
     let
-        ( name, shape, params, decoder ) =
-            unwrapQuery query
-
-        limitedQuery =
-            Query name shape { params | limit = limit } decoder
-
         settings =
             { count = False
             , singular = False
@@ -360,25 +313,22 @@ list limit url query =
         -- error. the solution to this in http builder is to basically just have
         -- an error type that comes with the Response and we can read it in a
         -- similar fashion to reading the json body.
-        postgRest settings url limitedQuery
+        postgRest settings url name { params | limit = limit }
             |> Http.send Http.defaultSettings
             |> Http.fromJson (Decode.list decoder)
 
 
 {-| -}
 retrieve : String -> Query s r -> Task.Task Http.Error r
-retrieve url query =
+retrieve url (Query name _ params decoder) =
     let
-        ( _, _, _, decoder ) =
-            unwrapQuery query
-
         settings =
             { count = False
             , singular = True
             , offset = Nothing
             }
     in
-        postgRest settings url query
+        postgRest settings url name params
             |> Http.send Http.defaultSettings
             |> Http.fromJson decoder
 
@@ -387,21 +337,15 @@ retrieve url query =
 -- maybe even a url to the next page? that might be cool.
 -}
 paginate : String -> Int -> Int -> Query s r -> Task.Task Http.Error (List r)
-paginate url pageNumber pageSize query =
+paginate url pageNumber pageSize (Query name _ params decoder) =
     let
-        ( name, shape, params, decoder ) =
-            unwrapQuery query
-
-        limitedQuery =
-            Query name shape { params | limit = Just pageSize } decoder
-
         settings =
             { count = True
             , singular = False
             , offset = Just (pageNumber * pageSize)
             }
     in
-        postgRest settings url query
+        postgRest settings url name { params | limit = Just pageSize }
             |> Http.send Http.defaultSettings
             |> Http.fromJson (Decode.list decoder)
 
@@ -413,14 +357,11 @@ type alias Settings =
     }
 
 
-postgRest : Settings -> String -> Query s r -> Http.Request
-postgRest settings url query =
+postgRest : Settings -> String -> String -> QueryParams -> Http.Request
+postgRest settings url name params =
     let
         { count, singular, offset } =
             settings
-
-        ( name, _, params, _ ) =
-            unwrapQuery query
 
         trailingSlashUrl =
             if String.right 1 url == "/" then
@@ -429,7 +370,7 @@ postgRest settings url query =
                 url ++ "/"
 
         ( labeledOrders, labeledFilters, labeledLimits ) =
-            labelParams "" params
+            labelParams params
 
         queryUrl =
             [ selectsToKeyValue params.select
@@ -505,8 +446,8 @@ offsetToKeyValue maybeOffset =
             [ ( "offset", toString offset ) ]
 
 
-labelParams : String -> QueryParams -> ( List ( String, OrderBy ), List ( String, Filter ), List ( String, Maybe Int ) )
-labelParams prefix params =
+labelParams' : String -> QueryParams -> ( List ( String, OrderBy ), List ( String, Filter ), List ( String, Maybe Int ) )
+labelParams' prefix params =
     -- if you squint your eyes, this is performing a concat map of sorts on the QueryParams
     let
         labelWithPrefix : a -> ( String, a )
@@ -520,7 +461,7 @@ labelParams prefix params =
                     Nothing
 
                 Nested nestedName nestedParams ->
-                    Just (labelParams (prefix ++ nestedName ++ ".") nestedParams)
+                    Just (labelParams' (prefix ++ nestedName ++ ".") nestedParams)
 
         appendTriples :
             ( appendable, appendable', appendable'' )
@@ -544,6 +485,11 @@ labelParams prefix params =
         params.select
             |> List.filterMap labelNested
             |> List.foldl appendTriples ( labeledOrders, labeledFilters, labeledLimit )
+
+
+labelParams : QueryParams -> ( List ( String, OrderBy ), List ( String, Filter ), List ( String, Maybe Int ) )
+labelParams =
+    labelParams' ""
 
 
 labeledFiltersToKeyValues : List ( String, Filter ) -> List ( String, String )
