@@ -9,50 +9,58 @@ import Json.Decode as Decode
 import Debug
 
 
-study =
-    resource "study"
+session =
+    resource "sessions"
         { id = field "id" Decode.int
-        , title = field "title" Decode.string
-        , description = field "description" Decode.string
-        , assist_id = field "assist_id" Decode.string
+        , speaker_id = field "speaker_id" Decode.int
+        , start_time = field "start_time" Decode.int
+        , end_time = field "end_time" Decode.int
+        , location = field "location" Decode.string
+        , session_type = field "session_type" Decode.int
         }
 
 
-discipline =
-    resource "discipline"
+speaker =
+    resource "speakers"
         { id = field "id" Decode.int
-        , title = field "title" Decode.string
+        , name = field "name" Decode.string
+        , lineup_order = field "lineup_order" Decode.int
+        , twitter = field "twitter" Decode.int
+        , avatar_url = field "avatar_url" Decode.int
+        , bio = field "bio" Decode.int
+        , featured = field "featured" Decode.int
         }
 
 
-type alias Study =
+type alias Session =
     { id : Int
-    , title : String
-    , description : String
-    , assist_id : String
     }
 
 
-type alias Discipline =
+type alias Speaker =
     { id : Int
-    , title : String
+    , name : String
+    , sessions : List Session
     }
 
 
-studyCmd =
-    query study Study
+sessionQuery =
+    query session Session
         |> select .id
-        |> select .title
-        |> select .description
-        |> select .assist_id
-        |> filter [ .title |> like "P%" ]
-        |> list (Just 1) "http://localhost:3000/"
+
+
+speakerCmd =
+    query speaker Speaker
+        |> select .id
+        |> select .name
+        |> includeMany Nothing sessionQuery
+        |> list Nothing "http://postgrest.herokuapp.com/"
         |> Task.perform FetchFail FetchSucceed
 
 
 main =
     App.program
-        { init = ( { studies = [] }, studyCmd )
+        { init = ( { speakers = [] }, speakerCmd )
         , update = update
         , view = view
         , subscriptions = \_ -> Sub.none
@@ -64,7 +72,7 @@ main =
 
 
 type alias Model =
-    { studies : List Study
+    { speakers : List Speaker
     }
 
 
@@ -73,18 +81,22 @@ type alias Model =
 
 
 type Msg
-    = FetchSucceed (List Study)
+    = FetchSucceed (List Speaker)
     | FetchFail Http.Error
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        FetchSucceed studies ->
-            ( { model | studies = studies }, Cmd.none )
+        FetchSucceed speakers ->
+            ( { model | speakers = speakers }, Cmd.none )
 
         FetchFail a ->
-            ( model, Cmd.none )
+            let
+                _ =
+                    Debug.log "error" a
+            in
+                ( model, Cmd.none )
 
 
 
@@ -92,5 +104,5 @@ update msg model =
 
 
 view : Model -> Html Msg
-view { studies } =
-    toString studies |> text
+view { speakers } =
+    toString speakers |> text
