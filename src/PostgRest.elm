@@ -41,8 +41,8 @@ import String
 import Task
 
 
-{-| https://github.com/elm-community/json-extra/blob/master/src/Json/Decode/Extra.elm#L86
-decided to just not import Json.Decode.Extra.
+{-| Copy pasta of Json.Decode.Extra.apply
+https://github.com/elm-community/json-extra/blob/master/src/Json/Decode/Extra.elm#L86
 -}
 apply : Decode.Decoder (a -> b) -> Decode.Decoder a -> Decode.Decoder b
 apply =
@@ -73,14 +73,7 @@ type Select
     | Nested String QueryParams
 
 
-{-| TODO
-query session Session
-    |> select .id & .location
-
-could maybe do something interesting with compound fields? or maybe it's a compound
-select? not sure.... but .id & .location could output something that could be selected on
-that represetnts both of those.
--}
+{-| -}
 type Field a
     = Field String (Decode.Decoder a)
 
@@ -278,8 +271,12 @@ desc fieldAccessor shape =
             Desc name
 
 
-{-| http://www.django-rest-framework.org/api-guide/generic-views/#retrieveupdateapiview
--}
+
+-- naming for these functions is based off of:
+-- http://www.django-rest-framework.org/api-guide/generic-views/#retrieveupdateapiview
+
+
+{-| -}
 list : Maybe Int -> String -> Query s r -> Task.Task Http.Error (List r)
 list limit url (Query name _ params decoder) =
     let
@@ -289,13 +286,6 @@ list limit url (Query name _ params decoder) =
             , offset = Nothing
             }
     in
-        -- TODO
-        -- according to ~20:00 fromJson may be too limiting in terms of error
-        -- handling https://www.dailydrip.com/topics/elm/drips/server-side-validations
-        -- this is b/c you can access the body of the response when there is an
-        -- error. the solution to this in http builder is to basically just have
-        -- an error type that comes with the Response and we can read it in a
-        -- similar fashion to reading the json body.
         postgRest settings url name { params | limit = limit }
             |> Http.send Http.defaultSettings
             |> Http.fromJson (Decode.list decoder)
@@ -316,21 +306,21 @@ retrieve url (Query name _ params decoder) =
             |> Http.fromJson decoder
 
 
-{-| TODO need to change the shape of the response to resemble a page! (include count and page number and such)
--- maybe even a url to the next page? that might be cool.
+
+{- TODO
+   paginate : String -> Int -> Int -> Query s r -> Task.Task Http.Error (List r)
+   paginate url pageNumber pageSize (Query name _ params decoder) =
+       let
+           settings =
+               { count = True
+               , singular = False
+               , offset = Just (pageNumber * pageSize)
+               }
+       in
+           postgRest settings url name { params | limit = Just pageSize }
+               |> Http.send Http.defaultSettings
+               |> Http.fromJson (Decode.list decoder)
 -}
-paginate : String -> Int -> Int -> Query s r -> Task.Task Http.Error (List r)
-paginate url pageNumber pageSize (Query name _ params decoder) =
-    let
-        settings =
-            { count = True
-            , singular = False
-            , offset = Just (pageNumber * pageSize)
-            }
-    in
-        postgRest settings url name { params | limit = Just pageSize }
-            |> Http.send Http.defaultSettings
-            |> Http.fromJson (Decode.list decoder)
 
 
 type alias Settings =
@@ -431,7 +421,6 @@ offsetToKeyValue maybeOffset =
 
 labelParams' : String -> QueryParams -> ( List ( String, OrderBy ), List ( String, Filter ), List ( String, Maybe Int ) )
 labelParams' prefix params =
-    -- if you squint your eyes, this is performing a concat map of sorts on the QueryParams
     let
         labelWithPrefix : a -> ( String, a )
         labelWithPrefix =
