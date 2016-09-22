@@ -31,7 +31,7 @@ module PostgRest
         )
 
 {-| PostgREST Query Builder!
-@docs Resource, Query, Select, OrderBy, Filter, resource, field, query, include, select, order, filter, like, eq, gte, gt, lte, lt, ilike, in', is, not', asc, desc, postgRest
+@docs field, Field, Resource, Query, Select, OrderBy, Filter, resource, query, include, includeMany, select, order, filter, like, eq, gte, gt, lte, lt, ilike, in', is, not', asc, desc, list, retrieve
 -}
 
 import Dict
@@ -59,6 +59,7 @@ type Query s r
     = Query String s QueryParams (Decode.Decoder r)
 
 
+{-| -}
 type alias QueryParams =
     { select : List Select
     , order : List OrderBy
@@ -184,6 +185,7 @@ filter filters (Query name shape params decoder) =
         decoder
 
 
+{-| -}
 singleValueFilterFn : (String -> Condition) -> a -> (s -> Field b) -> s -> Filter
 singleValueFilterFn condCtor condArg attrAccessor shape =
     case attrAccessor shape of
@@ -286,7 +288,7 @@ list limit url (Query name _ params decoder) =
             , offset = Nothing
             }
     in
-        postgRest settings url name { params | limit = limit }
+        toHttpRequest settings url name { params | limit = limit }
             |> Http.send Http.defaultSettings
             |> Http.fromJson (Decode.list decoder)
 
@@ -301,7 +303,7 @@ retrieve url (Query name _ params decoder) =
             , offset = Nothing
             }
     in
-        postgRest settings url name params
+        toHttpRequest settings url name params
             |> Http.send Http.defaultSettings
             |> Http.fromJson decoder
 
@@ -317,12 +319,13 @@ retrieve url (Query name _ params decoder) =
                , offset = Just (pageNumber * pageSize)
                }
        in
-           postgRest settings url name { params | limit = Just pageSize }
+           toHttpRequest settings url name { params | limit = Just pageSize }
                |> Http.send Http.defaultSettings
                |> Http.fromJson (Decode.list decoder)
 -}
 
 
+{-| -}
 type alias Settings =
     { count : Bool
     , singular : Bool
@@ -330,8 +333,9 @@ type alias Settings =
     }
 
 
-postgRest : Settings -> String -> String -> QueryParams -> Http.Request
-postgRest settings url name params =
+{-| -}
+toHttpRequest : Settings -> String -> String -> QueryParams -> Http.Request
+toHttpRequest settings url name params =
     let
         { count, singular, offset } =
             settings
@@ -378,6 +382,7 @@ postgRest settings url name params =
         }
 
 
+{-| -}
 selectsToKeyValue : List Select -> List ( String, String )
 selectsToKeyValue fields =
     let
@@ -409,6 +414,7 @@ selectsToKeyValue fields =
                 [ ( "select", selectsToString fields ) ]
 
 
+{-| -}
 offsetToKeyValue : Maybe Int -> List ( String, String )
 offsetToKeyValue maybeOffset =
     case maybeOffset of
@@ -419,6 +425,7 @@ offsetToKeyValue maybeOffset =
             [ ( "offset", toString offset ) ]
 
 
+{-| -}
 labelParams' : String -> QueryParams -> ( List ( String, OrderBy ), List ( String, Filter ), List ( String, Maybe Int ) )
 labelParams' prefix params =
     let
@@ -459,11 +466,13 @@ labelParams' prefix params =
             |> List.foldl appendTriples ( labeledOrders, labeledFilters, labeledLimit )
 
 
+{-| -}
 labelParams : QueryParams -> ( List ( String, OrderBy ), List ( String, Filter ), List ( String, Maybe Int ) )
 labelParams =
     labelParams' ""
 
 
+{-| -}
 labeledFiltersToKeyValues : List ( String, Filter ) -> List ( String, String )
 labeledFiltersToKeyValues filters =
     let
@@ -509,6 +518,7 @@ labeledFiltersToKeyValues filters =
         List.map filterToKeyValue filters
 
 
+{-| -}
 labeledOrdersToKeyValue : List ( String, OrderBy ) -> List ( String, String )
 labeledOrdersToKeyValue orders =
     let
@@ -554,6 +564,7 @@ labeledOrdersToKeyValue orders =
             |> List.filterMap labeledOrderToKeyValue
 
 
+{-| -}
 labeledLimitsToKeyValue : List ( String, Maybe Int ) -> List ( String, String )
 labeledLimitsToKeyValue limits =
     let
