@@ -147,42 +147,30 @@ query (Resource name shape) recordCtor =
 {-| -}
 include : Query s2 a -> Query s1 (a -> b) -> Query s1 b
 include (Query subName subShape subParams subDecoder) (Query queryName queryShape queryParams queryDecoder) =
-    let
-        nestedField =
-            Nested subName subParams
-    in
-        Query queryName
-            queryShape
-            { queryParams | select = nestedField :: queryParams.select }
-            (apply queryDecoder (subName := subDecoder))
+    Query queryName
+        queryShape
+        { queryParams | select = Nested subName subParams :: queryParams.select }
+        (apply queryDecoder (subName := subDecoder))
 
 
 {-| -}
 includeMany : Maybe Int -> Query s2 a -> Query s1 (List a -> b) -> Query s1 b
 includeMany limit (Query subName subShape subParams subDecoder) (Query queryName queryShape queryParams queryDecoder) =
-    let
-        nestedField =
-            Nested subName { subParams | limit = limit }
-    in
-        Query queryName
-            queryShape
-            { queryParams | select = nestedField :: queryParams.select }
-            (apply queryDecoder (subName := Decode.list subDecoder))
+    Query queryName
+        queryShape
+        { queryParams | select = Nested subName { subParams | limit = limit } :: queryParams.select }
+        (apply queryDecoder (subName := Decode.list subDecoder))
 
 
 {-| -}
 select : (s -> Field a) -> Query s (a -> b) -> Query s b
 select fieldAccessor (Query name shape params decoder) =
-    let
-        ( n, s, d ) =
-            case fieldAccessor shape of
-                Field name decoder ->
-                    ( name, Simple name, decoder )
-    in
-        Query name
-            shape
-            { params | select = s :: params.select }
-            (apply decoder (n := d))
+    case fieldAccessor shape of
+        Field fieldName fieldDecoder ->
+            Query name
+                shape
+                { params | select = Simple fieldName :: params.select }
+                (apply decoder (fieldName := fieldDecoder))
 
 
 {-| -}
@@ -267,12 +255,7 @@ is =
 
 
 {-| -}
-not' :
-    (a -> (s -> Field a) -> (s -> Filter))
-    -> a
-    -> (s -> Field a)
-    -> s
-    -> Filter
+not' : (a -> (s -> Field a) -> (s -> Filter)) -> a -> (s -> Field a) -> s -> Filter
 not' filterAccessorCtor val fieldAccessor shape =
     case filterAccessorCtor val fieldAccessor shape of
         Filter negated cond fieldName ->
