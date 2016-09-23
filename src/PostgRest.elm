@@ -4,7 +4,6 @@ module PostgRest
         , Field
         , Resource
         , Query
-        , Select
         , OrderBy
         , Filter
         , resource
@@ -31,7 +30,7 @@ module PostgRest
         )
 
 {-| PostgREST Query Builder!
-@docs field, Field, Resource, Query, Select, OrderBy, Filter, resource, query, include, includeMany, select, order, filter, like, eq, gte, gt, lte, lt, ilike, in', is, not', asc, desc, list, retrieve
+@docs field, Field, Resource, Query, OrderBy, Filter, resource, query, include, includeMany, select, order, filter, like, eq, gte, gt, lte, lt, ilike, in', is, not', asc, desc, list, retrieve
 -}
 
 import Dict
