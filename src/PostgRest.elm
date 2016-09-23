@@ -466,7 +466,13 @@ labelParams' prefix params =
             |> List.foldl appendTriples ( labeledOrders, labeledFilters, labeledLimit )
 
 
-{-| -}
+{-| NOTE: What if we were to label when we add?
+OrderBy, Filter, and Limit (we would add a type) could have a (Maybe String)
+which is populated with Nothing by default and changed to Just prefix whenever
+a query is included in another query. We would still need an operation to flatten
+the QueryParams, but the logic would be much simpler (would no longer be a weird
+concatMap) This may be a good idea / improve performance a smudge (prematureoptimzation much?)
+-}
 labelParams : QueryParams -> ( List ( String, OrderBy ), List ( String, Filter ), List ( String, Maybe Int ) )
 labelParams =
     labelParams' ""
