@@ -54,9 +54,7 @@ handleResponse handle response =
     let
         getCount =
             Dict.get "Content-Range" response.headers
-                `Maybe.andThen` (Regex.replace (Regex.All)
-                                    (Regex.regex ".+\\/")
-                                    (always "")
+                `Maybe.andThen` (Regex.replace (Regex.All) (Regex.regex ".+\\/") (always "")
                                     >> String.toInt
                                     >> Result.toMaybe
                                 )

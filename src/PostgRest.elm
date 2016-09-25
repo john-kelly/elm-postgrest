@@ -66,6 +66,9 @@ type alias QueryParams =
     -- TODO: in terms of both api design and implementation, it might be a good idea
     -- to represent limit as a Limit type. we can create a nice api for the user
     -- like so: |> list (limit 5) "http://postgrest.herokuapp.com/"
+    -- TODO: select should never be empty, so we're going to want to switch the
+    -- implementation to a  { first: ..., rest: ... } eventually. For now, this
+    -- is a known bug that hopefully people dont run into.
     { select : List Select
     , order : List OrderBy
     , filter : List Filter
@@ -410,7 +413,7 @@ selectsToKeyValue fields =
         selectsToString fields =
             case fields of
                 [] ->
-                    "*"
+                    ""
 
                 _ ->
                     fields
