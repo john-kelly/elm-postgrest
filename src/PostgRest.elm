@@ -27,10 +27,12 @@ module PostgRest
         , desc
         , list
         , retrieve
+        , paginate
+        , Page
         )
 
 {-| PostgREST Query Builder!
-@docs field, Field, Resource, Query, OrderBy, Filter, resource, query, include, includeMany, select, order, filter, like, eq, gte, gt, lte, lt, ilike, in', is, not', asc, desc, list, retrieve
+@docs field, Field, Resource, Query, OrderBy, Filter, resource, query, include, includeMany, select, order, filter, like, eq, gte, gt, lte, lt, ilike, in', is, not', asc, desc, list, retrieve, paginate, Page
 -}
 
 import Dict
@@ -38,6 +40,7 @@ import Http
 import Json.Decode as Decode exposing ((:=))
 import String
 import Task
+import PostgRest.Http
 
 
 {-| Copy pasta of Json.Decode.Extra.apply
@@ -60,10 +63,20 @@ type Query s r
 
 {-| -}
 type alias QueryParams =
+    -- TODO: in terms of both api design and implementation, it might be a good idea
+    -- to represent limit as a Limit type. we can create a nice api for the user
+    -- like so: |> list (limit 5) "http://postgrest.herokuapp.com/"
     { select : List Select
     , order : List OrderBy
     , filter : List Filter
     , limit : Maybe Int
+    }
+
+
+{-| -}
+type alias Page a =
+    { data : List a
+    , count : Int
     }
 
 
@@ -307,21 +320,20 @@ retrieve url (Query name _ params decoder) =
             |> Http.fromJson decoder
 
 
-
-{- TODO
-   paginate : String -> Int -> Int -> Query s r -> Task.Task Http.Error (List r)
-   paginate url pageNumber pageSize (Query name _ params decoder) =
-       let
-           settings =
-               { count = True
-               , singular = False
-               , offset = Just (pageNumber * pageSize)
-               }
-       in
-           toHttpRequest settings url name { params | limit = Just pageSize }
-               |> Http.send Http.defaultSettings
-               |> Http.fromJson (Decode.list decoder)
--}
+{-| -}
+paginate : { pageNumber : Int, pageSize : Int } -> String -> Query s r -> Task.Task Http.Error (Page r)
+paginate { pageNumber, pageSize } url (Query name _ params decoder) =
+    let
+        settings =
+            -- NOTE: pageNumber is NOT 0 indexed. the first page is 1.
+            { count = True
+            , singular = False
+            , offset = Just ((pageNumber - 1) * pageSize)
+            }
+    in
+        toHttpRequest settings url name { params | limit = Just pageSize }
+            |> Http.send Http.defaultSettings
+            |> PostgRest.Http.fromPage (Decode.list decoder)
 
 
 {-| -}
