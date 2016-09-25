@@ -31,8 +31,31 @@ module PostgRest
         , Page
         )
 
-{-| PostgREST Query Builder!
-@docs field, Field, Resource, Query, OrderBy, Filter, resource, query, include, includeMany, select, order, filter, like, eq, gte, gt, lte, lt, ilike, in', is, not', asc, desc, list, retrieve, paginate, Page
+{-|
+
+# PostgREST Query Builder
+
+To understand how to use this library it's best to take a look at the [examples](https://github.com/john-kelly/elm-postgrest/blob/master/examples/Main.elm)
+
+## Types
+@docs Field, Resource, Query, Select, OrderBy, Filter
+
+## Field and resource
+@docs field, resource
+
+## Http Tasks
+Tasks used to make Http requests
+
+@docs list, retrieve
+
+## Queries
+@docs query, include, includeMany, select, order, filter
+
+## Order
+@docs asc, desc
+
+## Filters
+@docs like, ilike, eq, gte, gt, lte, lt, in', is, not'
 -}
 
 import Dict
@@ -191,7 +214,8 @@ order orders (Query name shape params decoder) =
         decoder
 
 
-{-| -}
+{-| Apply filters to a query
+-}
 filter : List (s -> Filter) -> Query s r -> Query s r
 filter filters (Query name shape params decoder) =
     Query name
@@ -208,46 +232,54 @@ singleValueFilterFn condCtor condArg attrAccessor shape =
             Filter False (condCtor (coerceToString condArg)) name
 
 
-{-| -}
+{-|
+Simple [pattern matching](https://www.postgresql.org/docs/9.0/static/functions-matching.html)
+-}
 like : String -> (s -> Field String) -> s -> Filter
 like =
     singleValueFilterFn Like
 
 
-{-| -}
+{-| Case-insensitive `like`
+-}
+ilike : String -> (s -> Field String) -> s -> Filter
+ilike =
+    singleValueFilterFn ILike
+
+
+{-| Equals
+-}
 eq : a -> (s -> Field a) -> s -> Filter
 eq =
     singleValueFilterFn Eq
 
 
-{-| -}
+{-| Greater than or equals
+-}
 gte : a -> (s -> Field a) -> s -> Filter
 gte =
     singleValueFilterFn Gte
 
 
-{-| -}
+{-| Greater than
+-}
 gt : a -> (s -> Field a) -> s -> Filter
 gt =
     singleValueFilterFn Gt
 
 
-{-| -}
+{-| Less than or equals
+-}
 lte : a -> (s -> Field a) -> s -> Filter
 lte =
     singleValueFilterFn Lte
 
 
-{-| -}
+{-| Less than
+-}
 lt : a -> (s -> Field a) -> s -> Filter
 lt =
     singleValueFilterFn Lt
-
-
-{-| -}
-ilike : String -> (s -> Field String) -> s -> Filter
-ilike =
-    singleValueFilterFn ILike
 
 
 {-| -}
@@ -272,7 +304,8 @@ not' filterAccessorCtor val fieldAccessor shape =
             Filter (not negated) cond fieldName
 
 
-{-| -}
+{-| Ascending
+-}
 asc : (s -> Field a) -> s -> OrderBy
 asc fieldAccessor shape =
     case fieldAccessor shape of
@@ -280,7 +313,8 @@ asc fieldAccessor shape =
             Asc name
 
 
-{-| -}
+{-| Descending
+-}
 desc : (s -> Field a) -> s -> OrderBy
 desc fieldAccessor shape =
     case fieldAccessor shape of
@@ -293,7 +327,8 @@ desc fieldAccessor shape =
 -- http://www.django-rest-framework.org/api-guide/generic-views/#retrieveupdateapiview
 
 
-{-| -}
+{-| Takes `limit`, `url` and a `query`, returning a list of objects from database on success and Http.Error otherwise
+-}
 list : Maybe Int -> String -> Query s r -> Task.Task Http.Error (List r)
 list limit url (Query name _ params decoder) =
     let
@@ -308,7 +343,8 @@ list limit url (Query name _ params decoder) =
             |> Http.fromJson (Decode.list decoder)
 
 
-{-| -}
+{-| Takes `url` and a `query`, returning the first object from database on success and Http.Error otherwise
+-}
 retrieve : String -> Query s r -> Task.Task Http.Error r
 retrieve url (Query name _ params decoder) =
     let
@@ -339,7 +375,6 @@ paginate { pageNumber, pageSize } url (Query name _ params decoder) =
             |> PostgRest.Http.fromPage (Decode.list decoder)
 
 
-{-| -}
 type alias Settings =
     { count : Bool
     , singular : Bool
