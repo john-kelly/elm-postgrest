@@ -13,54 +13,34 @@ session =
     resource "sessions"
         { id = field "id" Decode.int
         , speaker_id = field "speaker_id" Decode.int
-        , start_time = field "start_time" Decode.int
-        , end_time = field "end_time" Decode.int
+        , start_time = field "start_time" Decode.string
+        , end_time = field "end_time" Decode.string
         , location = field "location" Decode.string
         , session_type = field "session_type" Decode.int
         }
 
 
-speaker =
-    resource "speakers"
-        { id = field "id" Decode.int
-        , name = field "name" Decode.string
-        , lineup_order = field "lineup_order" Decode.int
-        , twitter = field "twitter" Decode.int
-        , avatar_url = field "avatar_url" Decode.int
-        , bio = field "bio" Decode.int
-        , featured = field "featured" Decode.int
-        }
-
-
 type alias Session =
     { id : Int
+    , location : String
+    , start_time : String
     }
 
 
-type alias Speaker =
-    { id : Int
-    , name : String
-    , sessions : List Session
-    }
-
-
-sessionQuery =
+sessionCmd =
     query session Session
         |> select .id
-
-
-speakerCmd =
-    query speaker Speaker
-        |> select .id
-        |> select .name
-        |> includeMany Nothing sessionQuery
+        |> select .location
+        |> select .start_time
+        |> filter [ .location |> not' ilike "%russia%" ]
+        |> order [ asc .start_time ]
         |> list Nothing "http://postgrest.herokuapp.com/"
         |> Task.perform FetchFail FetchSucceed
 
 
 main =
     App.program
-        { init = ( { speakers = [] }, speakerCmd )
+        { init = ( { sessions = [] }, sessionCmd )
         , update = update
         , view = view
         , subscriptions = \_ -> Sub.none
@@ -72,7 +52,7 @@ main =
 
 
 type alias Model =
-    { speakers : List Speaker
+    { sessions : List Session
     }
 
 
@@ -81,15 +61,15 @@ type alias Model =
 
 
 type Msg
-    = FetchSucceed (List Speaker)
+    = FetchSucceed (List Session)
     | FetchFail Http.Error
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        FetchSucceed speakers ->
-            ( { model | speakers = speakers }, Cmd.none )
+        FetchSucceed sessions ->
+            ( { model | sessions = sessions }, Cmd.none )
 
         FetchFail a ->
             let
@@ -104,5 +84,5 @@ update msg model =
 
 
 view : Model -> Html Msg
-view { speakers } =
-    toString speakers |> text
+view { sessions } =
+    toString sessions |> text
