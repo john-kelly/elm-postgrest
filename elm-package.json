@@ -1,5 +1,5 @@
 {
-    "version": "2.0.0",
+    "version": "3.0.0",
     "summary": "PostgREST Query Builder",
     "repository": "https://github.com/john-kelly/elm-postgrest.git",
     "license": "BSD3",
