@@ -282,7 +282,8 @@ lt =
     singleValueFilterFn Lt
 
 
-{-| -}
+{-| In List
+-}
 in' : List a -> (schema -> Field a) -> schema -> Filter
 in' condArgs attrAccessor schema =
     case attrAccessor schema of
@@ -290,13 +291,15 @@ in' condArgs attrAccessor schema =
             Filter False (In (List.map coerceToString condArgs)) name
 
 
-{-| -}
+{-| Is comparison
+-}
 is : a -> (schema -> Field a) -> schema -> Filter
 is =
     singleValueFilterFn Is
 
 
-{-| -}
+{-| Negate a Filter
+-}
 not' : (a -> (schema -> Field a) -> (schema -> Filter)) -> a -> (schema -> Field a) -> schema -> Filter
 not' filterAccessorCtor val fieldAccessor schema =
     case filterAccessorCtor val fieldAccessor schema of
