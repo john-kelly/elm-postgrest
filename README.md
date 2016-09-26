@@ -9,16 +9,14 @@ import Task
 import PostgRest exposing (..)
 import Json.Decode as Decode
 
-type alias PokemonSchema =
-    { id : Field Int
-    , name : Field String
-    , base_experience : Field Int
-    , weight : Field Int
-    , height : Field Int
-    }
-
-
-pokemonResource : Resource PokemonSchema
+pokemonResource :
+    Resource
+        { id : Field Int
+        , name : Field String
+        , base_experience : Field Int
+        , weight : Field Int
+        , height : Field Int
+        }
 pokemonResource =
     resource "pokemon"
         { id = field "id" Decode.int
