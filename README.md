@@ -9,14 +9,6 @@ import Task
 import PostgRest exposing (..)
 import Json.Decode as Decode
 
-pokemonResource :
-    Resource
-        { id : Field Int
-        , name : Field String
-        , base_experience : Field Int
-        , weight : Field Int
-        , height : Field Int
-        }
 pokemonResource =
     resource "pokemon"
         { id = field "id" Decode.int
@@ -38,7 +30,6 @@ type Msg
     | FetchFail Http.Error
 
 
-pokemonCmd : Cmd Msg
 pokemonCmd =
     query pokemonResource Pokemon
         |> select .id
