@@ -1,11 +1,12 @@
 module PostgRest
     exposing
-        ( field
-        , Field
+        ( Field
         , Resource
         , Query
         , OrderBy
         , Filter
+        , Page
+        , field
         , resource
         , query
         , include
@@ -26,36 +27,35 @@ module PostgRest
         , asc
         , desc
         , list
-        , retrieve
+        , first
         , paginate
-        , Page
         )
 
-{-|
+{-| A query builder library for PostgREST.
 
-# PostgREST Query Builder
+I recommend looking at the [examples](https://github.com/john-kelly/elm-postgrest/blob/master/examples/Main.elm) before diving into the API or source code.
 
-To understand how to use this library it's best to take a look at the [examples](https://github.com/john-kelly/elm-postgrest/blob/master/examples/Main.elm)
+# Define a Resource
+@docs Resource, resource, Field, field
 
-## Types
-@docs Field, Resource, Query, Select, OrderBy, Filter
+# Build a Query
+@docs Query, query
 
-## Field and resource
-@docs field, resource
+### Selecting and Nesting
+@docs select, include, includeMany
 
-## Http Tasks
-Tasks used to make Http requests
+### Filtering
+@docs Filter, filter, like, ilike, eq, gte, gt, lte, lt, in', is, not'
 
-@docs list, retrieve
+### Ordering
+@docs OrderBy, order, asc, desc
 
-## Queries
-@docs query, include, includeMany, select, order, filter
+# Send a Query
+@docs list, first
 
-## Order
-@docs asc, desc
+### Pagination
+@docs Page, paginate
 
-## Filters
-@docs like, ilike, eq, gte, gt, lte, lt, in', is, not'
 -}
 
 import Dict
@@ -75,13 +75,13 @@ apply =
 
 
 {-| -}
-type Resource shape
-    = Resource String shape
+type Resource schema
+    = Resource String schema
 
 
 {-| -}
-type Query s r
-    = Query String s QueryParams (Decode.Decoder r)
+type Query schema a
+    = Query String schema QueryParams (Decode.Decoder a)
 
 
 {-| -}
@@ -156,7 +156,7 @@ coerceToString value =
 
 
 {-| -}
-resource : String -> s -> Resource s
+resource : String -> schema -> Resource schema
 resource =
     Resource
 
@@ -168,16 +168,16 @@ field =
 
 
 {-| -}
-query : Resource s -> (a -> r) -> Query s (a -> r)
-query (Resource name shape) recordCtor =
+query : Resource schema -> (a -> b) -> Query schema (a -> b)
+query (Resource name schema) recordCtor =
     Query name
-        shape
+        schema
         { select = [], filter = [], order = [], limit = Nothing }
         (Decode.succeed recordCtor)
 
 
 {-| -}
-include : Query s2 a -> Query s1 (a -> b) -> Query s1 b
+include : Query schema2 a -> Query schema1 (a -> b) -> Query schema1 b
 include (Query subName subShape subParams subDecoder) (Query queryName queryShape queryParams queryDecoder) =
     Query queryName
         queryShape
@@ -186,7 +186,7 @@ include (Query subName subShape subParams subDecoder) (Query queryName queryShap
 
 
 {-| -}
-includeMany : Maybe Int -> Query s2 a -> Query s1 (List a -> b) -> Query s1 b
+includeMany : Maybe Int -> Query schema2 a -> Query schema1 (List a -> b) -> Query schema1 b
 includeMany limit (Query subName subShape subParams subDecoder) (Query queryName queryShape queryParams queryDecoder) =
     Query queryName
         queryShape
@@ -195,129 +195,129 @@ includeMany limit (Query subName subShape subParams subDecoder) (Query queryName
 
 
 {-| -}
-select : (s -> Field a) -> Query s (a -> b) -> Query s b
-select fieldAccessor (Query name shape params decoder) =
-    case fieldAccessor shape of
+select : (schema -> Field a) -> Query schema (a -> b) -> Query schema b
+select fieldAccessor (Query name schema params decoder) =
+    case fieldAccessor schema of
         Field fieldName fieldDecoder ->
             Query name
-                shape
+                schema
                 { params | select = Simple fieldName :: params.select }
                 (apply decoder (fieldName := fieldDecoder))
 
 
 {-| -}
-order : List (s -> OrderBy) -> Query s r -> Query s r
-order orders (Query name shape params decoder) =
+order : List (schema -> OrderBy) -> Query schema a -> Query schema a
+order orders (Query name schema params decoder) =
     Query name
-        shape
-        { params | order = params.order ++ List.map (\fn -> fn shape) orders }
+        schema
+        { params | order = params.order ++ List.map (\fn -> fn schema) orders }
         decoder
 
 
 {-| Apply filters to a query
 -}
-filter : List (s -> Filter) -> Query s r -> Query s r
-filter filters (Query name shape params decoder) =
+filter : List (schema -> Filter) -> Query schema a -> Query schema a
+filter filters (Query name schema params decoder) =
     Query name
-        shape
-        { params | filter = params.filter ++ List.map (\fn -> fn shape) filters }
+        schema
+        { params | filter = params.filter ++ List.map (\fn -> fn schema) filters }
         decoder
 
 
 {-| -}
-singleValueFilterFn : (String -> Condition) -> a -> (s -> Field b) -> s -> Filter
-singleValueFilterFn condCtor condArg attrAccessor shape =
-    case attrAccessor shape of
+singleValueFilterFn : (String -> Condition) -> a -> (schema -> Field b) -> schema -> Filter
+singleValueFilterFn condCtor condArg attrAccessor schema =
+    case attrAccessor schema of
         Field name _ ->
             Filter False (condCtor (coerceToString condArg)) name
 
 
 {-|
-Simple [pattern matching](https://www.postgresql.org/docs/9.0/static/functions-matching.html)
+Simple [pattern matching](https://www.postgresql.org/docs/9.5/static/functions-matching.html#FUNCTIONS-LIKE)
 -}
-like : String -> (s -> Field String) -> s -> Filter
+like : String -> (schema -> Field String) -> schema -> Filter
 like =
     singleValueFilterFn Like
 
 
 {-| Case-insensitive `like`
 -}
-ilike : String -> (s -> Field String) -> s -> Filter
+ilike : String -> (schema -> Field String) -> schema -> Filter
 ilike =
     singleValueFilterFn ILike
 
 
 {-| Equals
 -}
-eq : a -> (s -> Field a) -> s -> Filter
+eq : a -> (schema -> Field a) -> schema -> Filter
 eq =
     singleValueFilterFn Eq
 
 
-{-| Greater than or equals
+{-| Greater than or equal to
 -}
-gte : a -> (s -> Field a) -> s -> Filter
+gte : a -> (schema -> Field a) -> schema -> Filter
 gte =
     singleValueFilterFn Gte
 
 
 {-| Greater than
 -}
-gt : a -> (s -> Field a) -> s -> Filter
+gt : a -> (schema -> Field a) -> schema -> Filter
 gt =
     singleValueFilterFn Gt
 
 
-{-| Less than or equals
+{-| Less than or equal to
 -}
-lte : a -> (s -> Field a) -> s -> Filter
+lte : a -> (schema -> Field a) -> schema -> Filter
 lte =
     singleValueFilterFn Lte
 
 
 {-| Less than
 -}
-lt : a -> (s -> Field a) -> s -> Filter
+lt : a -> (schema -> Field a) -> schema -> Filter
 lt =
     singleValueFilterFn Lt
 
 
 {-| -}
-in' : List a -> (s -> Field a) -> s -> Filter
-in' condArgs attrAccessor shape =
-    case attrAccessor shape of
+in' : List a -> (schema -> Field a) -> schema -> Filter
+in' condArgs attrAccessor schema =
+    case attrAccessor schema of
         Field name _ ->
             Filter False (In (List.map coerceToString condArgs)) name
 
 
 {-| -}
-is : a -> (s -> Field a) -> s -> Filter
+is : a -> (schema -> Field a) -> schema -> Filter
 is =
     singleValueFilterFn Is
 
 
 {-| -}
-not' : (a -> (s -> Field a) -> (s -> Filter)) -> a -> (s -> Field a) -> s -> Filter
-not' filterAccessorCtor val fieldAccessor shape =
-    case filterAccessorCtor val fieldAccessor shape of
+not' : (a -> (schema -> Field a) -> (schema -> Filter)) -> a -> (schema -> Field a) -> schema -> Filter
+not' filterAccessorCtor val fieldAccessor schema =
+    case filterAccessorCtor val fieldAccessor schema of
         Filter negated cond fieldName ->
             Filter (not negated) cond fieldName
 
 
 {-| Ascending
 -}
-asc : (s -> Field a) -> s -> OrderBy
-asc fieldAccessor shape =
-    case fieldAccessor shape of
+asc : (schema -> Field a) -> schema -> OrderBy
+asc fieldAccessor schema =
+    case fieldAccessor schema of
         Field name _ ->
             Asc name
 
 
 {-| Descending
 -}
-desc : (s -> Field a) -> s -> OrderBy
-desc fieldAccessor shape =
-    case fieldAccessor shape of
+desc : (schema -> Field a) -> schema -> OrderBy
+desc fieldAccessor schema =
+    case fieldAccessor schema of
         Field name _ ->
             Desc name
 
@@ -329,7 +329,7 @@ desc fieldAccessor shape =
 
 {-| Takes `limit`, `url` and a `query`, returning a list of objects from database on success and Http.Error otherwise
 -}
-list : Maybe Int -> String -> Query s r -> Task.Task Http.Error (List r)
+list : Maybe Int -> String -> Query schema a -> Task.Task Http.Error (List a)
 list limit url (Query name _ params decoder) =
     let
         settings =
@@ -345,8 +345,8 @@ list limit url (Query name _ params decoder) =
 
 {-| Takes `url` and a `query`, returning the first object from database on success and Http.Error otherwise
 -}
-retrieve : String -> Query s r -> Task.Task Http.Error r
-retrieve url (Query name _ params decoder) =
+first : String -> Query schema a -> Task.Task Http.Error a
+first url (Query name _ params decoder) =
     let
         settings =
             { count = False
@@ -360,7 +360,7 @@ retrieve url (Query name _ params decoder) =
 
 
 {-| -}
-paginate : { pageNumber : Int, pageSize : Int } -> String -> Query s r -> Task.Task Http.Error (Page r)
+paginate : { pageNumber : Int, pageSize : Int } -> String -> Query schema a -> Task.Task Http.Error (Page a)
 paginate { pageNumber, pageSize } url (Query name _ params decoder) =
     let
         settings =
