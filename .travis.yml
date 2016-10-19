@@ -1,7 +1,11 @@
-language: haskell
+language: node_js
+
+node_js:
+  - "6"
 
 install:
   - make install
 
 script:
   - make build
+  - make test

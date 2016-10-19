@@ -1,9 +1,9 @@
-install: ## Install build dependencies
+install: ## Install build dependencies and packages
 	npm install -g elm
 	npm install -g elm-test
-
-build: ## Install packages and build
 	elm-package install -y
+
+build: ## Build
 	elm-make
 
 test: ## Run unit tests
