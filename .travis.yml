@@ -9,3 +9,8 @@ install:
 script:
   - make build
   - make test
+
+cache:
+  directories:
+    - tests/elm-stuff/build-artifacts
+
