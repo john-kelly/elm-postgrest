@@ -1,0 +1,7 @@
+language: haskell
+
+install:
+  - make install
+
+script:
+  - make build
