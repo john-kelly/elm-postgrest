@@ -11,11 +11,11 @@ import Json.Decode as Decode
 
 pokemonResource =
     resource "pokemon"
-        { id = field "id" Decode.int
-        , name = field "name" Decode.string
-        , base_experience = field "base_experience" Decode.int
-        , weight = field "weight" Decode.int
-        , height = field "height" Decode.int
+        { id = int "id"
+        , name = string "name"
+        , base_experience = int "base_experience"
+        , weight = int "weight"
+        , height = int "height"
         }
 
 

@@ -242,8 +242,8 @@ filter filters (Query name schema params decoder) =
 singleValueFilterFn : (String -> Condition) -> a -> (schema -> Field a) -> schema -> Filter
 singleValueFilterFn condCtor condArg attrAccessor schema =
     case attrAccessor schema of
-        Field _ toStringFn name ->
-            Filter False (condCtor (toStringFn condArg)) name
+        Field _ urlEncoder name ->
+            Filter False (condCtor (urlEncoder condArg)) name
 
 
 {-|
@@ -301,8 +301,8 @@ lt =
 in' : List a -> (schema -> Field a) -> schema -> Filter
 in' condArgs attrAccessor schema =
     case attrAccessor schema of
-        Field _ toStringFn name ->
-            Filter False (In (List.map toStringFn condArgs)) name
+        Field _ urlEncoder name ->
+            Filter False (In (List.map urlEncoder condArgs)) name
 
 
 {-| Is comparison
