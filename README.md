@@ -1,5 +1,7 @@
 # elm-postgrest
 
+[![Build Status](https://travis-ci.org/john-kelly/elm-postgrest.svg?branch=master)](https://travis-ci.org/john-kelly/elm-postgrest)
+
 A query builder library for PostgREST.
 
 ## Example
