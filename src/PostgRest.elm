@@ -7,6 +7,10 @@ module PostgRest
         , Filter
         , Page
         , field
+        , string
+        , int
+        , float
+        , bool
         , resource
         , query
         , include
@@ -36,7 +40,7 @@ module PostgRest
 I recommend looking at the [examples](https://github.com/john-kelly/elm-postgrest/blob/master/examples/Main.elm) before diving into the API or source code.
 
 # Define a Resource
-@docs Resource, resource, Field, field
+@docs Resource, resource, Field, string, int, float, bool, field
 
 # Build a Query
 @docs Query, query
@@ -114,7 +118,7 @@ type Select
 
 {-| -}
 type Field a
-    = Field String (Decode.Decoder a)
+    = Field (Decode.Decoder a) (a -> String) String
 
 
 {-| -}
@@ -141,20 +145,6 @@ type Filter
     = Filter Bool Condition String
 
 
-{-| thanks lukewestby
-https://github.com/elm-lang/core/issues/657
--}
-coerceToString : a -> String
-coerceToString value =
-    let
-        stringValue =
-            toString value
-    in
-        stringValue
-            |> Decode.decodeString Decode.string
-            |> Result.withDefault stringValue
-
-
 {-| -}
 resource : String -> schema -> Resource schema
 resource =
@@ -162,9 +152,33 @@ resource =
 
 
 {-| -}
-field : String -> Decode.Decoder a -> Field a
+field : Decode.Decoder a -> (a -> String) -> String -> Field a
 field =
     Field
+
+
+{-| -}
+int : String -> Field Int
+int =
+    Field Decode.int toString
+
+
+{-| -}
+string : String -> Field String
+string =
+    Field Decode.string identity
+
+
+{-| -}
+bool : String -> Field Bool
+bool =
+    Field Decode.bool toString
+
+
+{-| -}
+float : String -> Field Float
+float =
+    Field Decode.float toString
 
 
 {-| -}
@@ -198,7 +212,7 @@ includeMany limit (Query subName subShape subParams subDecoder) (Query queryName
 select : (schema -> Field a) -> Query schema (a -> b) -> Query schema b
 select fieldAccessor (Query name schema params decoder) =
     case fieldAccessor schema of
-        Field fieldName fieldDecoder ->
+        Field fieldDecoder _ fieldName ->
             Query name
                 schema
                 { params | select = Simple fieldName :: params.select }
@@ -225,11 +239,11 @@ filter filters (Query name schema params decoder) =
 
 
 {-| -}
-singleValueFilterFn : (String -> Condition) -> a -> (schema -> Field b) -> schema -> Filter
+singleValueFilterFn : (String -> Condition) -> a -> (schema -> Field a) -> schema -> Filter
 singleValueFilterFn condCtor condArg attrAccessor schema =
     case attrAccessor schema of
-        Field name _ ->
-            Filter False (condCtor (coerceToString condArg)) name
+        Field _ urlEncoder name ->
+            Filter False (condCtor (urlEncoder condArg)) name
 
 
 {-|
@@ -287,8 +301,8 @@ lt =
 in' : List a -> (schema -> Field a) -> schema -> Filter
 in' condArgs attrAccessor schema =
     case attrAccessor schema of
-        Field name _ ->
-            Filter False (In (List.map coerceToString condArgs)) name
+        Field _ urlEncoder name ->
+            Filter False (In (List.map urlEncoder condArgs)) name
 
 
 {-| Is comparison
@@ -312,7 +326,7 @@ not' filterAccessorCtor val fieldAccessor schema =
 asc : (schema -> Field a) -> schema -> OrderBy
 asc fieldAccessor schema =
     case fieldAccessor schema of
-        Field name _ ->
+        Field _ _ name ->
             Asc name
 
 
@@ -321,7 +335,7 @@ asc fieldAccessor schema =
 desc : (schema -> Field a) -> schema -> OrderBy
 desc fieldAccessor schema =
     case fieldAccessor schema of
-        Field name _ ->
+        Field _ _ name ->
             Desc name
 
 

@@ -11,12 +11,12 @@ import Debug
 
 session =
     resource "sessions"
-        { id = field "id" Decode.int
-        , speaker_id = field "speaker_id" Decode.int
-        , start_time = field "start_time" Decode.string
-        , end_time = field "end_time" Decode.string
-        , location = field "location" Decode.string
-        , session_type = field "session_type" Decode.int
+        { id = int "id"
+        , speaker_id = int "speaker_id"
+        , start_time = string "start_time"
+        , end_time = string "end_time"
+        , location = string "location"
+        , session_type = int "session_type"
         }
 
 
