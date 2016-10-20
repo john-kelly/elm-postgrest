@@ -9,7 +9,6 @@ A query builder library for PostgREST.
 ```elm
 import Task
 import PostgRest exposing (..)
-import Json.Decode as Decode
 
 pokemonResource =
     resource "pokemon"

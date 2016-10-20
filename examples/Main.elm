@@ -5,7 +5,6 @@ import Html.App as App
 import Http
 import Task
 import PostgRest exposing (..)
-import Json.Decode as Decode
 import Debug
 
 
