@@ -183,40 +183,40 @@ float =
 
 {-| -}
 query : Resource schema -> (a -> b) -> Query schema (a -> b)
-query (Resource name schema) recordCtor =
+query (Resource name schema) ctor =
     Query name
         schema
         { select = [], filter = [], order = [], limit = Nothing }
-        (Decode.succeed recordCtor)
+        (Decode.succeed ctor)
 
 
 {-| -}
 include : Query schema2 a -> Query schema1 (a -> b) -> Query schema1 b
-include (Query subName subShape subParams subDecoder) (Query queryName queryShape queryParams queryDecoder) =
-    Query queryName
-        queryShape
-        { queryParams | select = Nested subName subParams :: queryParams.select }
-        (apply queryDecoder (subName := subDecoder))
+include (Query subName subSchema subParams subDecoder) (Query name schema params decoder) =
+    Query name
+        schema
+        { params | select = Nested subName subParams :: params.select }
+        (apply decoder (subName := subDecoder))
 
 
 {-| -}
 includeMany : Maybe Int -> Query schema2 a -> Query schema1 (List a -> b) -> Query schema1 b
-includeMany limit (Query subName subShape subParams subDecoder) (Query queryName queryShape queryParams queryDecoder) =
-    Query queryName
-        queryShape
-        { queryParams | select = Nested subName { subParams | limit = limit } :: queryParams.select }
-        (apply queryDecoder (subName := Decode.list subDecoder))
+includeMany limit (Query subName subSchema subParams subDecoder) (Query name schema params decoder) =
+    Query name
+        schema
+        { params | select = Nested subName { subParams | limit = limit } :: params.select }
+        (apply decoder (subName := Decode.list subDecoder))
 
 
 {-| -}
 select : (schema -> Field a) -> Query schema (a -> b) -> Query schema b
-select fieldAccessor (Query name schema params decoder) =
-    case fieldAccessor schema of
+select getField (Query queryName schema params queryDecoder) =
+    case getField schema of
         Field fieldDecoder _ fieldName ->
-            Query name
+            Query queryName
                 schema
                 { params | select = Simple fieldName :: params.select }
-                (apply decoder (fieldName := fieldDecoder))
+                (apply queryDecoder (fieldName := fieldDecoder))
 
 
 {-| -}
@@ -224,7 +224,7 @@ order : List (schema -> OrderBy) -> Query schema a -> Query schema a
 order orders (Query name schema params decoder) =
     Query name
         schema
-        { params | order = params.order ++ List.map (\fn -> fn schema) orders }
+        { params | order = params.order ++ List.map (\getOrder -> getOrder schema) orders }
         decoder
 
 
@@ -234,14 +234,14 @@ filter : List (schema -> Filter) -> Query schema a -> Query schema a
 filter filters (Query name schema params decoder) =
     Query name
         schema
-        { params | filter = params.filter ++ List.map (\fn -> fn schema) filters }
+        { params | filter = params.filter ++ List.map (\getFilter -> getFilter schema) filters }
         decoder
 
 
 {-| -}
 singleValueFilterFn : (String -> Condition) -> a -> (schema -> Field a) -> schema -> Filter
-singleValueFilterFn condCtor condArg attrAccessor schema =
-    case attrAccessor schema of
+singleValueFilterFn condCtor condArg getField schema =
+    case getField schema of
         Field _ urlEncoder name ->
             Filter False (condCtor (urlEncoder condArg)) name
 
@@ -299,8 +299,8 @@ lt =
 {-| In List
 -}
 in' : List a -> (schema -> Field a) -> schema -> Filter
-in' condArgs attrAccessor schema =
-    case attrAccessor schema of
+in' condArgs getField schema =
+    case getField schema of
         Field _ urlEncoder name ->
             Filter False (In (List.map urlEncoder condArgs)) name
 
@@ -314,9 +314,9 @@ is =
 
 {-| Negate a Filter
 -}
-not' : (a -> (schema -> Field a) -> (schema -> Filter)) -> a -> (schema -> Field a) -> schema -> Filter
-not' filterAccessorCtor val fieldAccessor schema =
-    case filterAccessorCtor val fieldAccessor schema of
+not' : (a -> (schema -> Field a) -> schema -> Filter) -> a -> (schema -> Field a) -> schema -> Filter
+not' filterCtor val getField schema =
+    case filterCtor val getField schema of
         Filter negated cond fieldName ->
             Filter (not negated) cond fieldName
 
@@ -324,8 +324,8 @@ not' filterAccessorCtor val fieldAccessor schema =
 {-| Ascending
 -}
 asc : (schema -> Field a) -> schema -> OrderBy
-asc fieldAccessor schema =
-    case fieldAccessor schema of
+asc getField schema =
+    case getField schema of
         Field _ _ name ->
             Asc name
 
@@ -333,8 +333,8 @@ asc fieldAccessor schema =
 {-| Descending
 -}
 desc : (schema -> Field a) -> schema -> OrderBy
-desc fieldAccessor schema =
-    case fieldAccessor schema of
+desc getField schema =
+    case getField schema of
         Field _ _ name ->
             Desc name
 
