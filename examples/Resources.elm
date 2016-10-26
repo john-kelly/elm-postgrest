@@ -18,9 +18,9 @@ speaker =
     PG.resource "speakers"
         { id = PG.int "id"
         , name = PG.string "name"
-        , twitter = PG.string "twitter"
+        , twitter = PG.nullable (PG.string "twitter")
         , avatar_url = PG.string "avatar_url"
-        , bio = PG.string "bio"
+        , bio = PG.nullable (PG.string "bio")
         , featured = PG.bool "featured"
-        , lineup_order = PG.int "lineup_order"
+        , lineup_order = PG.nullable (PG.int "lineup_order")
         }

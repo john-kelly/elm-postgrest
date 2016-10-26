@@ -17,6 +17,7 @@ type alias Session =
 type alias Speaker =
     { id : Int
     , name : String
+    , bio : Maybe String
     }
 
 
@@ -26,6 +27,7 @@ sessionCmd =
             PG.query Resources.speaker Speaker
                 |> PG.select .id
                 |> PG.select .name
+                |> PG.select .bio
     in
         PG.query Resources.session Session
             |> PG.select .id

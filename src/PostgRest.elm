@@ -11,6 +11,7 @@ module PostgRest
         , int
         , float
         , bool
+        , nullable
         , resource
         , query
         , include
@@ -40,7 +41,7 @@ module PostgRest
 I recommend looking at the [examples](https://github.com/john-kelly/elm-postgrest/blob/master/examples/Main.elm) before diving into the API or source code.
 
 # Define a Resource
-@docs Resource, resource, Field, string, int, float, bool, field
+@docs Resource, resource, Field, string, int, float, bool, field, nullable
 
 # Build a Query
 @docs Query, query
@@ -161,15 +162,30 @@ string =
 
 
 {-| -}
+float : String -> Field Float
+float =
+    Field Decode.float toString
+
+
+{-| -}
 bool : String -> Field Bool
 bool =
     Field Decode.bool toString
 
 
 {-| -}
-float : String -> Field Float
-float =
-    Field Decode.float toString
+nullable : Field a -> Field (Maybe a)
+nullable (Field decoder urlEncoder name) =
+    let
+        fieldToString maybeVal =
+            case maybeVal of
+                Just val ->
+                    urlEncoder val
+
+                Nothing ->
+                    "null"
+    in
+        Field (Decode.nullable decoder) fieldToString name
 
 
 {-| -}
