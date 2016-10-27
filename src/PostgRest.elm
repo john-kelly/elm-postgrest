@@ -5,6 +5,7 @@ module PostgRest
         , Query
         , OrderBy
         , Filter
+        , Limit
         , Page
         , field
         , string
@@ -31,6 +32,8 @@ module PostgRest
         , not
         , asc
         , desc
+        , limitTo
+        , noLimit
         , list
         , first
         , paginate
@@ -54,6 +57,9 @@ I recommend looking at the [examples](https://github.com/john-kelly/elm-postgres
 
 ### Ordering
 @docs OrderBy, order, asc, desc
+
+### Limiting
+@docs Limit, limitTo, noLimit
 
 # Send a Query
 @docs list, first
@@ -82,16 +88,13 @@ type Query schema a
 
 {-| -}
 type alias QueryParams =
-    -- TODO: in terms of both api design and implementation, it might be a good idea
-    -- to represent limit as a Limit type. we can create a nice api for the user
-    -- like so: |> list (limit 5) "http://postgrest.herokuapp.com/"
     -- TODO: select should never be empty, so we're going to want to switch the
     -- implementation to a  { first: ..., rest: ... } eventually. For now, this
     -- is a known bug that hopefully people dont run into.
     { select : List Select
     , order : List OrderBy
     , filter : List Filter
-    , limit : Maybe Int
+    , limit : Limit
     }
 
 
@@ -117,6 +120,10 @@ type Field a
 type OrderBy
     = Asc String
     | Desc String
+
+
+type Limit
+    = Limit (Maybe Int)
 
 
 {-| -}
@@ -193,7 +200,7 @@ query : Resource schema -> (a -> b) -> Query schema (a -> b)
 query (Resource name schema) ctor =
     Query name
         schema
-        { select = [], filter = [], order = [], limit = Nothing }
+        { select = [], filter = [], order = [], limit = Limit Nothing }
         (Decode.succeed ctor)
 
 
@@ -207,7 +214,7 @@ include (Query subName subSchema subParams subDecoder) (Query name schema params
 
 
 {-| -}
-includeMany : Maybe Int -> Query schema2 a -> Query schema1 (List a -> b) -> Query schema1 b
+includeMany : Limit -> Query schema2 a -> Query schema1 (List a -> b) -> Query schema1 b
 includeMany limit (Query subName subSchema subParams subDecoder) (Query name schema params decoder) =
     Query name
         schema
@@ -224,6 +231,18 @@ select getField (Query queryName schema params queryDecoder) =
                 schema
                 { params | select = Simple fieldName :: params.select }
                 (apply queryDecoder (Decode.field fieldName fieldDecoder))
+
+
+{-| -}
+limitTo : Int -> Limit
+limitTo limit =
+    Limit (Just limit)
+
+
+{-| -}
+noLimit : Limit
+noLimit =
+    Limit Nothing
 
 
 {-| -}
@@ -353,7 +372,7 @@ desc getField schema =
 
 {-| Takes `limit`, `url` and a `query`, returns an Http.Request
 -}
-list : Maybe Int -> String -> Query schema a -> Http.Request (List a)
+list : Limit -> String -> Query schema a -> Http.Request (List a)
 list limit url (Query name _ params decoder) =
     let
         settings =
@@ -413,7 +432,7 @@ paginate { pageNumber, pageSize } url (Query name _ params decoder) =
             }
 
         ( headers, queryUrl ) =
-            getHeadersAndQueryUrl settings url name { params | limit = Just pageSize }
+            getHeadersAndQueryUrl settings url name { params | limit = Limit (Just pageSize) }
 
         handleResponse response =
             let
@@ -536,14 +555,14 @@ offsetToKeyValue maybeOffset =
 
 
 {-| -}
-labelParamsHelper : String -> QueryParams -> ( List ( String, OrderBy ), List ( String, Filter ), List ( String, Maybe Int ) )
+labelParamsHelper : String -> QueryParams -> ( List ( String, OrderBy ), List ( String, Filter ), List ( String, Limit ) )
 labelParamsHelper prefix params =
     let
         labelWithPrefix : a -> ( String, a )
         labelWithPrefix =
             (,) prefix
 
-        labelNested : Select -> Maybe ( List ( String, OrderBy ), List ( String, Filter ), List ( String, Maybe Int ) )
+        labelNested : Select -> Maybe ( List ( String, OrderBy ), List ( String, Filter ), List ( String, Limit ) )
         labelNested field =
             case field of
                 Simple _ ->
@@ -567,7 +586,7 @@ labelParamsHelper prefix params =
         labeledFilters =
             List.map labelWithPrefix params.filter
 
-        labeledLimit : List ( String, Maybe Int )
+        labeledLimit : List ( String, Limit )
         labeledLimit =
             [ labelWithPrefix params.limit ]
     in
@@ -583,7 +602,7 @@ a query is included in another query. We would still need an operation to flatte
 the QueryParams, but the logic would be much simpler (would no longer be a weird
 concatMap) This may be a good idea / improve performance a smudge (prematureoptimzation much?)
 -}
-labelParams : QueryParams -> ( List ( String, OrderBy ), List ( String, Filter ), List ( String, Maybe Int ) )
+labelParams : QueryParams -> ( List ( String, OrderBy ), List ( String, Filter ), List ( String, Limit ) )
 labelParams =
     labelParamsHelper ""
 
@@ -681,16 +700,16 @@ labeledOrdersToKeyValue orders =
 
 
 {-| -}
-labeledLimitsToKeyValue : List ( String, Maybe Int ) -> List ( String, String )
+labeledLimitsToKeyValue : List ( String, Limit ) -> List ( String, String )
 labeledLimitsToKeyValue limits =
     let
-        toKeyValue : ( String, Maybe Int ) -> Maybe ( String, String )
+        toKeyValue : ( String, Limit ) -> Maybe ( String, String )
         toKeyValue labeledLimit =
             case labeledLimit of
-                ( _, Nothing ) ->
+                ( _, Limit Nothing ) ->
                     Nothing
 
-                ( prefix, Just limit ) ->
+                ( prefix, Limit (Just limit) ) ->
                     Just ( "limit" ++ prefix, toString limit )
     in
         List.filterMap toKeyValue limits
