@@ -29,5 +29,5 @@ pokemonRequest =
         |> PG.select .name
         |> PG.filter [ .id |> PG.lte 151 ]
         |> PG.order [ PG.asc .id ]
-        |> PG.list Nothing "http://localhost:8000/"
+        |> PG.list PG.noLimit "http://localhost:8000/"
 ```
