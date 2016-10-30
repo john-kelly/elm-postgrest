@@ -155,32 +155,33 @@ type Filter
     = Filter Bool Condition String
 
 
-{-| https://wiki.haskell.org/Empty_type
--}
+
+-- https://wiki.haskell.org/Empty_type
+-- https://wiki.haskell.org/Phantom_type
+
+
+{-| -}
 type HasMany
     = HasMany HasMany
 
 
-{-| https://wiki.haskell.org/Empty_type
--}
+{-| -}
 type HasOne
     = HasOne HasOne
 
 
-{-|
-    https://wiki.haskell.org/Phantom_type
-    phantom type ftw!
-    uniq is a uniq identifier for a resource, most commonly going to be a super simple type
--}
+{-| -}
 type Relation a uniq
     = Relation
 
 
+{-| -}
 hasOne : uniq -> Relation HasOne uniq
 hasOne uniq =
     Relation
 
 
+{-| -}
 hasMany : uniq -> Relation HasMany uniq
 hasMany uniq =
     Relation
