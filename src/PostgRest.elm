@@ -8,6 +8,8 @@ module PostgRest
         , Limit
         , Page
         , Relation
+        , HasOne
+        , HasMany
         , hasOne
         , hasMany
         , field
@@ -47,7 +49,13 @@ module PostgRest
 I recommend looking at the [examples](https://github.com/john-kelly/elm-postgrest/blob/master/examples/Main.elm) before diving into the API or source code.
 
 # Define a Resource
-@docs Resource, resource, Field, string, int, float, bool, field, nullable
+@docs Resource, resource
+
+### Fields
+@docs Field, string, int, float, bool, field, nullable
+
+### Relations
+@docs Relation, HasOne, hasOne, hasMany, HasMany
 
 # Build a Query
 @docs Query, query
