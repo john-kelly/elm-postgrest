@@ -7,6 +7,9 @@ module PostgRest
         , Filter
         , Limit
         , Page
+        , Relation
+        , hasOne
+        , hasMany
         , field
         , string
         , int
@@ -77,12 +80,12 @@ import String
 
 
 {-| -}
-type Resource schema
+type Resource uniq schema
     = Resource String schema
 
 
 {-| -}
-type Query schema a
+type Query uniq schema a
     = Query String schema QueryParams (Decode.Decoder a)
 
 
@@ -144,10 +147,41 @@ type Filter
     = Filter Bool Condition String
 
 
+{-| https://wiki.haskell.org/Empty_type
+-}
+type HasMany
+    = HasMany HasMany
+
+
+{-| https://wiki.haskell.org/Empty_type
+-}
+type HasOne
+    = HasOne HasOne
+
+
+{-|
+    https://wiki.haskell.org/Phantom_type
+    phantom type ftw!
+    uniq is a uniq identifier for a resource, most commonly going to be a super simple type
+-}
+type Relation a uniq
+    = Relation
+
+
+hasOne : uniq -> Relation HasOne uniq
+hasOne uniq =
+    Relation
+
+
+hasMany : uniq -> Relation HasMany uniq
+hasMany uniq =
+    Relation
+
+
 {-| -}
-resource : String -> schema -> Resource schema
-resource =
-    Resource
+resource : uniq -> String -> schema -> Resource uniq schema
+resource uniq name schema =
+    Resource name schema
 
 
 {-| -}
@@ -196,7 +230,7 @@ nullable (Field decoder urlEncoder name) =
 
 
 {-| -}
-query : Resource schema -> (a -> b) -> Query schema (a -> b)
+query : Resource uniq schema -> (a -> b) -> Query uniq schema (a -> b)
 query (Resource name schema) ctor =
     Query name
         schema
@@ -205,17 +239,17 @@ query (Resource name schema) ctor =
 
 
 {-| -}
-include : Query schema2 a -> Query schema1 (a -> b) -> Query schema1 b
-include (Query subName subSchema subParams subDecoder) (Query name schema params decoder) =
+include : (schema1 -> Relation HasOne uniq2) -> Query uniq2 schema2 a -> Query uniq1 schema1 (Maybe a -> b) -> Query uniq1 schema1 b
+include _ (Query subName subSchema subParams subDecoder) (Query name schema params decoder) =
     Query name
         schema
         { params | select = Nested subName subParams :: params.select }
-        (apply decoder (Decode.field subName subDecoder))
+        (apply decoder (Decode.nullable (Decode.field subName subDecoder)))
 
 
 {-| -}
-includeMany : Limit -> Query schema2 a -> Query schema1 (List a -> b) -> Query schema1 b
-includeMany limit (Query subName subSchema subParams subDecoder) (Query name schema params decoder) =
+includeMany : (schema1 -> Relation HasMany uniq2) -> Limit -> Query uniq2 schema2 a -> Query uniq1 schema1 (List a -> b) -> Query uniq1 schema1 b
+includeMany _ limit (Query subName subSchema subParams subDecoder) (Query name schema params decoder) =
     Query name
         schema
         { params | select = Nested subName { subParams | limit = limit } :: params.select }
@@ -223,7 +257,7 @@ includeMany limit (Query subName subSchema subParams subDecoder) (Query name sch
 
 
 {-| -}
-select : (schema -> Field a) -> Query schema (a -> b) -> Query schema b
+select : (schema -> Field a) -> Query uniq schema (a -> b) -> Query uniq schema b
 select getField (Query queryName schema params queryDecoder) =
     case getField schema of
         Field fieldDecoder _ fieldName ->
@@ -246,7 +280,7 @@ noLimit =
 
 
 {-| -}
-order : List (schema -> OrderBy) -> Query schema a -> Query schema a
+order : List (schema -> OrderBy) -> Query uniq schema a -> Query uniq schema a
 order orders (Query name schema params decoder) =
     Query name
         schema
@@ -256,7 +290,7 @@ order orders (Query name schema params decoder) =
 
 {-| Apply filters to a query
 -}
-filter : List (schema -> Filter) -> Query schema a -> Query schema a
+filter : List (schema -> Filter) -> Query uniq schema a -> Query uniq schema a
 filter filters (Query name schema params decoder) =
     Query name
         schema
@@ -372,7 +406,7 @@ desc getField schema =
 
 {-| Takes `limit`, `url` and a `query`, returns an Http.Request
 -}
-list : Limit -> String -> Query schema a -> Http.Request (List a)
+list : Limit -> String -> Query uniq schema a -> Http.Request (List a)
 list limit url (Query name _ params decoder) =
     let
         settings =
@@ -397,7 +431,7 @@ list limit url (Query name _ params decoder) =
 
 {-| Takes `url` and a `query`, returns an Http.Request
 -}
-first : String -> Query schema a -> Http.Request a
+first : String -> Query uniq schema a -> Http.Request (Maybe a)
 first url (Query name _ params decoder) =
     let
         settings =
@@ -414,14 +448,14 @@ first url (Query name _ params decoder) =
             , headers = headers
             , url = queryUrl
             , body = Http.emptyBody
-            , expect = Http.expectJson decoder
+            , expect = Http.expectJson (Decode.nullable decoder)
             , timeout = Nothing
             , withCredentials = False
             }
 
 
 {-| -}
-paginate : { pageNumber : Int, pageSize : Int } -> String -> Query schema a -> Http.Request (Page a)
+paginate : { pageNumber : Int, pageSize : Int } -> String -> Query uniq schema a -> Http.Request (Page a)
 paginate { pageNumber, pageSize } url (Query name _ params decoder) =
     let
         settings =
@@ -596,8 +630,7 @@ labelParamsHelper prefix params =
 
 
 {-| NOTE: What if we were to label when we add?
-OrderBy, Filter, and Limit (we would add a type) could have a (Maybe String)
-which is populated with Nothing by default and changed to Just prefix whenever
+OrderBy, Filter, and Limit could have a List String which is populated by prefix info whenever
 a query is included in another query. We would still need an operation to flatten
 the QueryParams, but the logic would be much simpler (would no longer be a weird
 concatMap) This may be a good idea / improve performance a smudge (prematureoptimzation much?)

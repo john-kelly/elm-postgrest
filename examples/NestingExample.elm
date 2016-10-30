@@ -10,7 +10,7 @@ type alias Session =
     { id : Int
     , location : String
     , start_time : String
-    , speaker : Speaker
+    , speaker : Maybe Speaker
     }
 
 
@@ -33,7 +33,7 @@ sessionCmd =
             |> PG.select .id
             |> PG.select .location
             |> PG.select .start_time
-            |> PG.include speakerQuery
+            |> PG.include .speaker speakerQuery
             |> PG.filter [ .location |> PG.not PG.ilike "%russia%" ]
             |> PG.order [ PG.asc .start_time ]
             |> PG.list PG.noLimit "http://postgrest.herokuapp.com/"
