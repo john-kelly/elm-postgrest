@@ -7,36 +7,27 @@ A query builder library for PostgREST.
 ## Example
 
 ```elm
-import Task
-import PostgRest exposing (..)
+import PostgRest as PG
 
 pokemonResource =
-    resource "pokemon"
-        { id = int "id"
-        , name = string "name"
-        , base_experience = int "base_experience"
-        , weight = int "weight"
-        , height = int "height"
+    PG.resource "pokemon"
+        { id = PG.int "id"
+        , name = PG.string "name"
+        , base_experience = PG.int "base_experience"
+        , weight = PG.int "weight"
+        , height = PG.int "height"
         }
-
 
 type alias Pokemon =
     { id : Int
     , name : String
     }
 
-
-type Msg
-    = FetchSucceed (List Pokemon)
-    | FetchFail Http.Error
-
-
-pokemonCmd =
-    query pokemonResource Pokemon
-        |> select .id
-        |> select .name
-        |> filter [ .id |> lte 151 ]
-        |> order [ asc .id ]
-        |> list Nothing "http://localhost:8000/"
-        |> Task.perform FetchFail FetchSucceed
+pokemonRequest =
+    PG.query pokemonResource Pokemon
+        |> PG.select .id
+        |> PG.select .name
+        |> PG.filter [ .id |> PG.lte 151 ]
+        |> PG.order [ PG.asc .id ]
+        |> PG.list PG.noLimit "http://localhost:8000/"
 ```

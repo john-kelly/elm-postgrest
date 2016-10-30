@@ -5,12 +5,19 @@ module PostgRest
         , Query
         , OrderBy
         , Filter
+        , Limit
         , Page
+        , Relation
+        , HasOne
+        , HasMany
+        , hasOne
+        , hasMany
         , field
         , string
         , int
         , float
         , bool
+        , nullable
         , resource
         , query
         , include
@@ -25,11 +32,13 @@ module PostgRest
         , lte
         , lt
         , ilike
-        , in'
+        , inList
         , is
-        , not'
+        , not
         , asc
         , desc
+        , limitTo
+        , noLimit
         , list
         , first
         , paginate
@@ -40,7 +49,13 @@ module PostgRest
 I recommend looking at the [examples](https://github.com/john-kelly/elm-postgrest/blob/master/examples/Main.elm) before diving into the API or source code.
 
 # Define a Resource
-@docs Resource, resource, Field, string, int, float, bool, field
+@docs Resource, resource
+
+### Fields
+@docs Field, string, int, float, bool, field, nullable
+
+### Relations
+@docs Relation, HasOne, hasOne, hasMany, HasMany
 
 # Build a Query
 @docs Query, query
@@ -49,10 +64,13 @@ I recommend looking at the [examples](https://github.com/john-kelly/elm-postgres
 @docs select, include, includeMany
 
 ### Filtering
-@docs Filter, filter, like, ilike, eq, gte, gt, lte, lt, in', is, not'
+@docs Filter, filter, like, ilike, eq, gte, gt, lte, lt, inList, is, not
 
 ### Ordering
 @docs OrderBy, order, asc, desc
+
+### Limiting
+@docs Limit, limitTo, noLimit
 
 # Send a Query
 @docs list, first
@@ -64,42 +82,30 @@ I recommend looking at the [examples](https://github.com/john-kelly/elm-postgres
 
 import Dict
 import Http
-import Json.Decode as Decode exposing ((:=))
+import Json.Decode as Decode
+import Regex
 import String
-import Task
-import PostgRest.Http
-
-
-{-| Copy pasta of Json.Decode.Extra.apply
-https://github.com/elm-community/json-extra/blob/master/src/Json/Decode/Extra.elm#L86
--}
-apply : Decode.Decoder (a -> b) -> Decode.Decoder a -> Decode.Decoder b
-apply =
-    Decode.object2 (<|)
 
 
 {-| -}
-type Resource schema
+type Resource uniq schema
     = Resource String schema
 
 
 {-| -}
-type Query schema a
+type Query uniq schema a
     = Query String schema QueryParams (Decode.Decoder a)
 
 
 {-| -}
 type alias QueryParams =
-    -- TODO: in terms of both api design and implementation, it might be a good idea
-    -- to represent limit as a Limit type. we can create a nice api for the user
-    -- like so: |> list (limit 5) "http://postgrest.herokuapp.com/"
     -- TODO: select should never be empty, so we're going to want to switch the
     -- implementation to a  { first: ..., rest: ... } eventually. For now, this
     -- is a known bug that hopefully people dont run into.
     { select : List Select
     , order : List OrderBy
     , filter : List Filter
-    , limit : Maybe Int
+    , limit : Limit
     }
 
 
@@ -127,6 +133,10 @@ type OrderBy
     | Desc String
 
 
+type Limit
+    = Limit (Maybe Int)
+
+
 {-| -}
 type Condition
     = Like String
@@ -145,10 +155,42 @@ type Filter
     = Filter Bool Condition String
 
 
+
+-- https://wiki.haskell.org/Empty_type
+-- https://wiki.haskell.org/Phantom_type
+
+
 {-| -}
-resource : String -> schema -> Resource schema
-resource =
-    Resource
+type HasMany
+    = HasMany HasMany
+
+
+{-| -}
+type HasOne
+    = HasOne HasOne
+
+
+{-| -}
+type Relation a uniq
+    = Relation
+
+
+{-| -}
+hasOne : uniq -> Relation HasOne uniq
+hasOne uniq =
+    Relation
+
+
+{-| -}
+hasMany : uniq -> Relation HasMany uniq
+hasMany uniq =
+    Relation
+
+
+{-| -}
+resource : uniq -> String -> schema -> Resource uniq schema
+resource uniq name schema =
+    Resource name schema
 
 
 {-| -}
@@ -170,57 +212,84 @@ string =
 
 
 {-| -}
-bool : String -> Field Bool
-bool =
-    Field Decode.bool toString
-
-
-{-| -}
 float : String -> Field Float
 float =
     Field Decode.float toString
 
 
 {-| -}
-query : Resource schema -> (a -> b) -> Query schema (a -> b)
+bool : String -> Field Bool
+bool =
+    Field Decode.bool toString
+
+
+{-| -}
+nullable : Field a -> Field (Maybe a)
+nullable (Field decoder urlEncoder name) =
+    let
+        fieldToString maybeVal =
+            case maybeVal of
+                Just val ->
+                    urlEncoder val
+
+                Nothing ->
+                    "null"
+    in
+        Field (Decode.nullable decoder) fieldToString name
+
+
+{-| -}
+query : Resource uniq schema -> (a -> b) -> Query uniq schema (a -> b)
 query (Resource name schema) ctor =
     Query name
         schema
-        { select = [], filter = [], order = [], limit = Nothing }
+        { select = [], filter = [], order = [], limit = Limit Nothing }
         (Decode.succeed ctor)
 
 
 {-| -}
-include : Query schema2 a -> Query schema1 (a -> b) -> Query schema1 b
-include (Query subName subSchema subParams subDecoder) (Query name schema params decoder) =
+include : (schema1 -> Relation HasOne uniq2) -> Query uniq2 schema2 a -> Query uniq1 schema1 (Maybe a -> b) -> Query uniq1 schema1 b
+include _ (Query subName subSchema subParams subDecoder) (Query name schema params decoder) =
     Query name
         schema
         { params | select = Nested subName subParams :: params.select }
-        (apply decoder (subName := subDecoder))
+        (apply decoder (Decode.nullable (Decode.field subName subDecoder)))
 
 
 {-| -}
-includeMany : Maybe Int -> Query schema2 a -> Query schema1 (List a -> b) -> Query schema1 b
-includeMany limit (Query subName subSchema subParams subDecoder) (Query name schema params decoder) =
+includeMany : (schema1 -> Relation HasMany uniq2) -> Limit -> Query uniq2 schema2 a -> Query uniq1 schema1 (List a -> b) -> Query uniq1 schema1 b
+includeMany _ limit (Query subName subSchema subParams subDecoder) (Query name schema params decoder) =
     Query name
         schema
         { params | select = Nested subName { subParams | limit = limit } :: params.select }
-        (apply decoder (subName := Decode.list subDecoder))
+        (apply decoder (Decode.field subName (Decode.list subDecoder)))
 
 
 {-| -}
-select : (schema -> Field a) -> Query schema (a -> b) -> Query schema b
+select : (schema -> Field a) -> Query uniq schema (a -> b) -> Query uniq schema b
 select getField (Query queryName schema params queryDecoder) =
     case getField schema of
         Field fieldDecoder _ fieldName ->
             Query queryName
                 schema
                 { params | select = Simple fieldName :: params.select }
-                (apply queryDecoder (fieldName := fieldDecoder))
+                (apply queryDecoder (Decode.field fieldName fieldDecoder))
 
 
 {-| -}
-order : List (schema -> OrderBy) -> Query schema a -> Query schema a
+limitTo : Int -> Limit
+limitTo limit =
+    Limit (Just limit)
+
+
+{-| -}
+noLimit : Limit
+noLimit =
+    Limit Nothing
+
+
+{-| -}
+order : List (schema -> OrderBy) -> Query uniq schema a -> Query uniq schema a
 order orders (Query name schema params decoder) =
     Query name
         schema
@@ -230,7 +299,7 @@ order orders (Query name schema params decoder) =
 
 {-| Apply filters to a query
 -}
-filter : List (schema -> Filter) -> Query schema a -> Query schema a
+filter : List (schema -> Filter) -> Query uniq schema a -> Query uniq schema a
 filter filters (Query name schema params decoder) =
     Query name
         schema
@@ -298,8 +367,8 @@ lt =
 
 {-| In List
 -}
-in' : List a -> (schema -> Field a) -> schema -> Filter
-in' condArgs getField schema =
+inList : List a -> (schema -> Field a) -> schema -> Filter
+inList condArgs getField schema =
     case getField schema of
         Field _ urlEncoder name ->
             Filter False (In (List.map urlEncoder condArgs)) name
@@ -314,11 +383,11 @@ is =
 
 {-| Negate a Filter
 -}
-not' : (a -> (schema -> Field a) -> schema -> Filter) -> a -> (schema -> Field a) -> schema -> Filter
-not' filterCtor val getField schema =
+not : (a -> (schema -> Field a) -> schema -> Filter) -> a -> (schema -> Field a) -> schema -> Filter
+not filterCtor val getField schema =
     case filterCtor val getField schema of
         Filter negated cond fieldName ->
-            Filter (not negated) cond fieldName
+            Filter (Basics.not negated) cond fieldName
 
 
 {-| Ascending
@@ -344,9 +413,9 @@ desc getField schema =
 -- http://www.django-rest-framework.org/api-guide/generic-views/#retrieveupdateapiview
 
 
-{-| Takes `limit`, `url` and a `query`, returning a list of objects from database on success and Http.Error otherwise
+{-| Takes `limit`, `url` and a `query`, returns an Http.Request
 -}
-list : Maybe Int -> String -> Query schema a -> Task.Task Http.Error (List a)
+list : Limit -> String -> Query uniq schema a -> Http.Request (List a)
 list limit url (Query name _ params decoder) =
     let
         settings =
@@ -354,15 +423,24 @@ list limit url (Query name _ params decoder) =
             , singular = False
             , offset = Nothing
             }
+
+        ( headers, queryUrl ) =
+            getHeadersAndQueryUrl settings url name { params | limit = limit }
     in
-        toHttpRequest settings url name { params | limit = limit }
-            |> Http.send Http.defaultSettings
-            |> Http.fromJson (Decode.list decoder)
+        Http.request
+            { method = "GET"
+            , headers = headers
+            , url = queryUrl
+            , body = Http.emptyBody
+            , expect = Http.expectJson (Decode.list decoder)
+            , timeout = Nothing
+            , withCredentials = False
+            }
 
 
-{-| Takes `url` and a `query`, returning the first object from database on success and Http.Error otherwise
+{-| Takes `url` and a `query`, returns an Http.Request
 -}
-first : String -> Query schema a -> Task.Task Http.Error a
+first : String -> Query uniq schema a -> Http.Request (Maybe a)
 first url (Query name _ params decoder) =
     let
         settings =
@@ -370,14 +448,23 @@ first url (Query name _ params decoder) =
             , singular = True
             , offset = Nothing
             }
+
+        ( headers, queryUrl ) =
+            getHeadersAndQueryUrl settings url name params
     in
-        toHttpRequest settings url name params
-            |> Http.send Http.defaultSettings
-            |> Http.fromJson decoder
+        Http.request
+            { method = "GET"
+            , headers = headers
+            , url = queryUrl
+            , body = Http.emptyBody
+            , expect = Http.expectJson (Decode.nullable decoder)
+            , timeout = Nothing
+            , withCredentials = False
+            }
 
 
 {-| -}
-paginate : { pageNumber : Int, pageSize : Int } -> String -> Query schema a -> Task.Task Http.Error (Page a)
+paginate : { pageNumber : Int, pageSize : Int } -> String -> Query uniq schema a -> Http.Request (Page a)
 paginate { pageNumber, pageSize } url (Query name _ params decoder) =
     let
         settings =
@@ -386,10 +473,32 @@ paginate { pageNumber, pageSize } url (Query name _ params decoder) =
             , singular = False
             , offset = Just ((pageNumber - 1) * pageSize)
             }
+
+        ( headers, queryUrl ) =
+            getHeadersAndQueryUrl settings url name { params | limit = Limit (Just pageSize) }
+
+        handleResponse response =
+            let
+                countResult =
+                    Dict.get "Content-Range" response.headers
+                        |> Result.fromMaybe "No Content-Range Header"
+                        |> Result.andThen (Regex.replace (Regex.All) (Regex.regex ".+\\/") (always "") >> Ok)
+                        |> Result.andThen String.toInt
+
+                jsonResult =
+                    Decode.decodeString (Decode.list decoder) response.body
+            in
+                Result.map2 Page jsonResult countResult
     in
-        toHttpRequest settings url name { params | limit = Just pageSize }
-            |> Http.send Http.defaultSettings
-            |> PostgRest.Http.fromPage (Decode.list decoder)
+        Http.request
+            { method = "GET"
+            , headers = headers
+            , url = queryUrl
+            , body = Http.emptyBody
+            , expect = Http.expectStringResponse handleResponse
+            , timeout = Nothing
+            , withCredentials = False
+            }
 
 
 type alias Settings =
@@ -400,8 +509,8 @@ type alias Settings =
 
 
 {-| -}
-toHttpRequest : Settings -> String -> String -> QueryParams -> Http.Request
-toHttpRequest settings url name params =
+getHeadersAndQueryUrl : Settings -> String -> String -> QueryParams -> ( List Http.Header, String )
+getHeadersAndQueryUrl settings url name params =
     let
         { count, singular, offset } =
             settings
@@ -423,7 +532,7 @@ toHttpRequest settings url name params =
             , offsetToKeyValue offset
             ]
                 |> List.foldl (++) []
-                |> Http.url (trailingSlashUrl ++ name)
+                |> queryParamsToUrl (trailingSlashUrl ++ name)
 
         pluralityHeader =
             if singular then
@@ -439,13 +548,10 @@ toHttpRequest settings url name params =
                 []
 
         headers =
-            pluralityHeader ++ countHeader
+            (pluralityHeader ++ countHeader)
+                |> List.map (\( a, b ) -> Http.header a b)
     in
-        { verb = "GET"
-        , headers = headers
-        , url = queryUrl
-        , body = Http.empty
-        }
+        ( headers, queryUrl )
 
 
 {-| -}
@@ -492,26 +598,26 @@ offsetToKeyValue maybeOffset =
 
 
 {-| -}
-labelParams' : String -> QueryParams -> ( List ( String, OrderBy ), List ( String, Filter ), List ( String, Maybe Int ) )
-labelParams' prefix params =
+labelParamsHelper : String -> QueryParams -> ( List ( String, OrderBy ), List ( String, Filter ), List ( String, Limit ) )
+labelParamsHelper prefix params =
     let
         labelWithPrefix : a -> ( String, a )
         labelWithPrefix =
             (,) prefix
 
-        labelNested : Select -> Maybe ( List ( String, OrderBy ), List ( String, Filter ), List ( String, Maybe Int ) )
+        labelNested : Select -> Maybe ( List ( String, OrderBy ), List ( String, Filter ), List ( String, Limit ) )
         labelNested field =
             case field of
                 Simple _ ->
                     Nothing
 
                 Nested nestedName nestedParams ->
-                    Just (labelParams' (prefix ++ nestedName ++ ".") nestedParams)
+                    Just (labelParamsHelper (prefix ++ nestedName ++ ".") nestedParams)
 
         appendTriples :
-            ( appendable, appendable', appendable'' )
-            -> ( appendable, appendable', appendable'' )
-            -> ( appendable, appendable', appendable'' )
+            ( appendable1, appendable2, appendable3 )
+            -> ( appendable1, appendable2, appendable3 )
+            -> ( appendable1, appendable2, appendable3 )
         appendTriples ( os1, fs1, ls1 ) ( os2, fs2, ls2 ) =
             ( os1 ++ os2, fs1 ++ fs2, ls1 ++ ls2 )
 
@@ -523,7 +629,7 @@ labelParams' prefix params =
         labeledFilters =
             List.map labelWithPrefix params.filter
 
-        labeledLimit : List ( String, Maybe Int )
+        labeledLimit : List ( String, Limit )
         labeledLimit =
             [ labelWithPrefix params.limit ]
     in
@@ -533,15 +639,14 @@ labelParams' prefix params =
 
 
 {-| NOTE: What if we were to label when we add?
-OrderBy, Filter, and Limit (we would add a type) could have a (Maybe String)
-which is populated with Nothing by default and changed to Just prefix whenever
+OrderBy, Filter, and Limit could have a List String which is populated by prefix info whenever
 a query is included in another query. We would still need an operation to flatten
 the QueryParams, but the logic would be much simpler (would no longer be a weird
 concatMap) This may be a good idea / improve performance a smudge (prematureoptimzation much?)
 -}
-labelParams : QueryParams -> ( List ( String, OrderBy ), List ( String, Filter ), List ( String, Maybe Int ) )
+labelParams : QueryParams -> ( List ( String, OrderBy ), List ( String, Filter ), List ( String, Limit ) )
 labelParams =
-    labelParams' ""
+    labelParamsHelper ""
 
 
 {-| -}
@@ -637,16 +742,45 @@ labeledOrdersToKeyValue orders =
 
 
 {-| -}
-labeledLimitsToKeyValue : List ( String, Maybe Int ) -> List ( String, String )
+labeledLimitsToKeyValue : List ( String, Limit ) -> List ( String, String )
 labeledLimitsToKeyValue limits =
     let
-        toKeyValue : ( String, Maybe Int ) -> Maybe ( String, String )
+        toKeyValue : ( String, Limit ) -> Maybe ( String, String )
         toKeyValue labeledLimit =
             case labeledLimit of
-                ( _, Nothing ) ->
+                ( _, Limit Nothing ) ->
                     Nothing
 
-                ( prefix, Just limit ) ->
+                ( prefix, Limit (Just limit) ) ->
                     Just ( "limit" ++ prefix, toString limit )
     in
         List.filterMap toKeyValue limits
+
+
+{-| Copy pasta of the old Http.url
+https://github.com/evancz/elm-http/blob/3.0.1/src/Http.elm#L56
+-}
+queryParamsToUrl : String -> List ( String, String ) -> String
+queryParamsToUrl baseUrl args =
+    let
+        queryPair : ( String, String ) -> String
+        queryPair ( key, value ) =
+            queryEscape key ++ "=" ++ queryEscape value
+
+        queryEscape : String -> String
+        queryEscape string =
+            String.join "+" (String.split "%20" (Http.encodeUri string))
+    in
+        case args of
+            [] ->
+                baseUrl
+
+            _ ->
+                baseUrl ++ "?" ++ String.join "&" (List.map queryPair args)
+
+
+{-| Copy pasta of Json.Decode.Extra.apply
+-}
+apply : Decode.Decoder (a -> b) -> Decode.Decoder a -> Decode.Decoder b
+apply =
+    Decode.map2 (<|)
