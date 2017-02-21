@@ -9,8 +9,12 @@ A query builder library for PostgREST.
 ```elm
 import PostgRest as PG
 
+type PokemonResource
+    = PokemonResource
+
 pokemonResource =
-    PG.resource "pokemon"
+    PG.resource PokemonResource
+        "pokemon"
         { id = PG.int "id"
         , name = PG.string "name"
         , base_experience = PG.int "base_experience"
