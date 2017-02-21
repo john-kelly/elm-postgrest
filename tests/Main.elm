@@ -1,13 +1,22 @@
-port module Main exposing (..)
+module Main exposing (..)
 
-import Tests
-import Test.Runner.Node exposing (run)
-import Json.Encode exposing (Value)
+import Test exposing (..)
+import Test.Runner.Html
+import Fuzz exposing (..)
+import Expect
+import PostgRest as PG
 
 
-main : Program Value
 main =
-    run emit Tests.all
+    [ tests
+    ]
+        |> concat
+        |> Test.Runner.Html.run
 
 
-port emit : ( String, Value ) -> Cmd msg
+tests : Test
+tests =
+    describe "tests"
+        [ test "the empty list has 0 length" <|
+            \() -> List.length [] |> Expect.equal 0
+        ]
