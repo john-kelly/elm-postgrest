@@ -1,12 +1,11 @@
 module Main exposing (..)
 
-import Test exposing (..)
-import Test.Runner.Html
-import Fuzz exposing (..)
-import Expect
-import PostgRest as PG
+import Tests
+import Test.Runner.Node exposing (run, TestProgram)
+import Json.Encode exposing (Value)
 
 
+main : TestProgram
 main =
     [ tests
     ]
