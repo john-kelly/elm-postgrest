@@ -1,4 +1,4 @@
-port module Main exposing (..)
+module Main exposing (..)
 
 import Tests
 import Test.Runner.Node exposing (run, TestProgram)
@@ -7,7 +7,15 @@ import Json.Encode exposing (Value)
 
 main : TestProgram
 main =
-    run emit Tests.all
+    [ tests
+    ]
+        |> concat
+        |> Test.Runner.Html.run
 
 
-port emit : ( String, Value ) -> Cmd msg
+tests : Test
+tests =
+    describe "tests"
+        [ test "the empty list has 0 length" <|
+            \() -> List.length [] |> Expect.equal 0
+        ]
