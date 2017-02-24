@@ -753,7 +753,7 @@ labeledLimitsToKeyValue limits =
                     Nothing
 
                 ( prefix, Limit (Just limit) ) ->
-                    Just ( "limit" ++ prefix, toString limit )
+                    Just ( prefix ++ "limit", toString limit )
     in
         List.filterMap toKeyValue limits
 
