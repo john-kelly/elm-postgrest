@@ -94,19 +94,19 @@ type Resource uniq schema
 
 {-| -}
 type Query uniq schema a
-    = Query String schema QueryParams (Decode.Decoder a)
+    = Query schema Parameters (Decode.Decoder a)
 
 
 {-| -}
-type alias QueryParams =
-    -- TODO: select should never be empty, so we're going to want to switch the
-    -- implementation to a  { first: ..., rest: ... } eventually. For now, this
-    -- is a known bug that hopefully people dont run into.
-    { select : List Select
-    , order : List OrderBy
-    , filter : List Filter
-    , limit : Limit
-    }
+type Parameters
+    = Parameters
+        { name : String
+        , select : List String
+        , order : List OrderBy
+        , filter : List Filter
+        , limit : Limit
+        , embedded : List Parameters
+        }
 
 
 {-| -}
@@ -114,12 +114,6 @@ type alias Page a =
     { data : List a
     , count : Int
     }
-
-
-{-| -}
-type Select
-    = Simple String
-    | Nested String QueryParams
 
 
 {-| -}
@@ -242,38 +236,34 @@ nullable (Field decoder urlEncoder name) =
 {-| -}
 query : Resource uniq schema -> (a -> b) -> Query uniq schema (a -> b)
 query (Resource name schema) ctor =
-    Query name
-        schema
-        { select = [], filter = [], order = [], limit = Limit Nothing }
+    Query schema
+        (Parameters { name = name, select = [], filter = [], order = [], limit = Limit Nothing, embedded = [] })
         (Decode.succeed ctor)
 
 
 {-| -}
 include : (schema1 -> Relation HasOne uniq2) -> Query uniq2 schema2 a -> Query uniq1 schema1 (Maybe a -> b) -> Query uniq1 schema1 b
-include _ (Query subName subSchema subParams subDecoder) (Query name schema params decoder) =
-    Query name
-        schema
-        { params | select = Nested subName subParams :: params.select }
-        (apply decoder (Decode.nullable (Decode.field subName subDecoder)))
+include _ (Query _ (Parameters subParams) subDecoder) (Query schema (Parameters params) decoder) =
+    Query schema
+        (Parameters { params | embedded = (Parameters subParams) :: params.embedded })
+        (apply decoder (Decode.nullable (Decode.field subParams.name subDecoder)))
 
 
 {-| -}
 includeMany : (schema1 -> Relation HasMany uniq2) -> Limit -> Query uniq2 schema2 a -> Query uniq1 schema1 (List a -> b) -> Query uniq1 schema1 b
-includeMany _ limit (Query subName subSchema subParams subDecoder) (Query name schema params decoder) =
-    Query name
-        schema
-        { params | select = Nested subName { subParams | limit = limit } :: params.select }
-        (apply decoder (Decode.field subName (Decode.list subDecoder)))
+includeMany _ limit (Query _ (Parameters subParams) subDecoder) (Query schema (Parameters params) decoder) =
+    Query schema
+        (Parameters { params | embedded = (Parameters { subParams | limit = limit }) :: params.embedded })
+        (apply decoder (Decode.field subParams.name (Decode.list subDecoder)))
 
 
 {-| -}
 select : (schema -> Field a) -> Query uniq schema (a -> b) -> Query uniq schema b
-select getField (Query queryName schema params queryDecoder) =
+select getField (Query schema (Parameters params) queryDecoder) =
     case getField schema of
         Field fieldDecoder _ fieldName ->
-            Query queryName
-                schema
-                { params | select = Simple fieldName :: params.select }
+            Query schema
+                (Parameters { params | select = fieldName :: params.select })
                 (apply queryDecoder (Decode.field fieldName fieldDecoder))
 
 
@@ -291,20 +281,18 @@ noLimit =
 
 {-| -}
 order : List (schema -> OrderBy) -> Query uniq schema a -> Query uniq schema a
-order orders (Query name schema params decoder) =
-    Query name
-        schema
-        { params | order = params.order ++ List.map (\getOrder -> getOrder schema) orders }
+order orders (Query schema (Parameters params) decoder) =
+    Query schema
+        (Parameters { params | order = params.order ++ List.map (\getOrder -> getOrder schema) orders })
         decoder
 
 
 {-| Apply filters to a query
 -}
 filter : List (schema -> Filter) -> Query uniq schema a -> Query uniq schema a
-filter filters (Query name schema params decoder) =
-    Query name
-        schema
-        { params | filter = params.filter ++ List.map (\getFilter -> getFilter schema) filters }
+filter filters (Query schema (Parameters params) decoder) =
+    Query schema
+        (Parameters { params | filter = params.filter ++ List.map (\getFilter -> getFilter schema) filters })
         decoder
 
 
@@ -417,7 +405,7 @@ desc getField schema =
 {-| Takes `limit`, `url` and a `query`, returns an Http.Request
 -}
 list : Limit -> String -> Query uniq schema a -> Http.Request (List a)
-list limit url (Query name _ params decoder) =
+list limit url (Query _ (Parameters params) decoder) =
     let
         settings =
             { count = False
@@ -426,7 +414,7 @@ list limit url (Query name _ params decoder) =
             }
 
         ( headers, queryUrl ) =
-            getHeadersAndQueryUrl settings url name { params | limit = limit }
+            getHeadersAndQueryUrl settings url params.name (Parameters { params | limit = limit })
     in
         Http.request
             { method = "GET"
@@ -442,7 +430,7 @@ list limit url (Query name _ params decoder) =
 {-| Takes `url` and a `query`, returns an Http.Request
 -}
 first : String -> Query uniq schema a -> Http.Request (Maybe a)
-first url (Query name _ params decoder) =
+first url (Query _ (Parameters params) decoder) =
     let
         settings =
             { count = False
@@ -451,7 +439,7 @@ first url (Query name _ params decoder) =
             }
 
         ( headers, queryUrl ) =
-            getHeadersAndQueryUrl settings url name params
+            getHeadersAndQueryUrl settings url params.name (Parameters params)
     in
         Http.request
             { method = "GET"
@@ -466,7 +454,7 @@ first url (Query name _ params decoder) =
 
 {-| -}
 paginate : { pageNumber : Int, pageSize : Int } -> String -> Query uniq schema a -> Http.Request (Page a)
-paginate { pageNumber, pageSize } url (Query name _ params decoder) =
+paginate { pageNumber, pageSize } url (Query _ (Parameters params) decoder) =
     let
         settings =
             -- NOTE: pageNumber is NOT 0 indexed. the first page is 1.
@@ -476,7 +464,7 @@ paginate { pageNumber, pageSize } url (Query name _ params decoder) =
             }
 
         ( headers, queryUrl ) =
-            getHeadersAndQueryUrl settings url name { params | limit = Limit (Just pageSize) }
+            getHeadersAndQueryUrl settings url params.name (Parameters { params | limit = Limit (Just pageSize) })
 
         handleResponse response =
             let
@@ -510,8 +498,8 @@ type alias Settings =
 
 
 {-| -}
-getHeadersAndQueryUrl : Settings -> String -> String -> QueryParams -> ( List Http.Header, String )
-getHeadersAndQueryUrl settings url name params =
+getHeadersAndQueryUrl : Settings -> String -> String -> Parameters -> ( List Http.Header, String )
+getHeadersAndQueryUrl settings url name p =
     let
         { count, singular, offset } =
             settings
@@ -523,10 +511,10 @@ getHeadersAndQueryUrl settings url name params =
                 url ++ "/"
 
         ( labeledOrders, labeledFilters, labeledLimits ) =
-            labelParams params
+            labelParams p
 
         queryUrl =
-            [ selectsToKeyValue params.select
+            [ selectsToKeyValue p
             , labeledFiltersToKeyValues labeledFilters
             , labeledOrdersToKeyValue labeledOrders
             , labeledLimitsToKeyValue labeledLimits
@@ -555,36 +543,29 @@ getHeadersAndQueryUrl settings url name params =
         ( headers, queryUrl )
 
 
-{-| -}
-selectsToKeyValue : List Select -> List ( String, String )
-selectsToKeyValue fields =
+selectsToKeyValueHelper : Parameters -> String
+selectsToKeyValueHelper (Parameters params) =
     let
-        selectToString : Select -> String
-        selectToString field =
-            case field of
-                Simple name ->
-                    name
+        embedded =
+            List.map selectsToKeyValueHelper params.embedded
 
-                Nested name { select } ->
-                    name ++ "{" ++ selectsToString select ++ "}"
-
-        selectsToString : List Select -> String
-        selectsToString fields =
-            case fields of
-                [] ->
-                    ""
-
-                _ ->
-                    fields
-                        |> List.map selectToString
-                        |> String.join ","
+        selection =
+            String.join "," (params.select ++ embedded)
     in
-        case fields of
-            [] ->
-                []
+        params.name ++ "{" ++ selection ++ "}"
 
-            _ ->
-                [ ( "select", selectsToString fields ) ]
+
+{-| -}
+selectsToKeyValue : Parameters -> List ( String, String )
+selectsToKeyValue (Parameters params) =
+    let
+        embedded =
+            List.map selectsToKeyValueHelper params.embedded
+
+        selection =
+            String.join "," (params.select ++ embedded)
+    in
+        [ ( "select", selection ) ]
 
 
 {-| -}
@@ -599,21 +580,16 @@ offsetToKeyValue maybeOffset =
 
 
 {-| -}
-labelParamsHelper : String -> QueryParams -> ( List ( String, OrderBy ), List ( String, Filter ), List ( String, Limit ) )
-labelParamsHelper prefix params =
+labelParamsHelper : String -> Parameters -> ( List ( String, OrderBy ), List ( String, Filter ), List ( String, Limit ) )
+labelParamsHelper prefix (Parameters params) =
     let
         labelWithPrefix : a -> ( String, a )
         labelWithPrefix =
             (,) prefix
 
-        labelNested : Select -> Maybe ( List ( String, OrderBy ), List ( String, Filter ), List ( String, Limit ) )
-        labelNested field =
-            case field of
-                Simple _ ->
-                    Nothing
-
-                Nested nestedName nestedParams ->
-                    Just (labelParamsHelper (prefix ++ nestedName ++ ".") nestedParams)
+        labelNested : Parameters -> ( List ( String, OrderBy ), List ( String, Filter ), List ( String, Limit ) )
+        labelNested (Parameters params) =
+            labelParamsHelper (prefix ++ params.name ++ ".") (Parameters params)
 
         appendTriples :
             ( appendable1, appendable2, appendable3 )
@@ -634,8 +610,8 @@ labelParamsHelper prefix params =
         labeledLimit =
             [ labelWithPrefix params.limit ]
     in
-        params.select
-            |> List.filterMap labelNested
+        params.embedded
+            |> List.map labelNested
             |> List.foldl appendTriples ( labeledOrders, labeledFilters, labeledLimit )
 
 
@@ -645,7 +621,7 @@ a query is included in another query. We would still need an operation to flatte
 the QueryParams, but the logic would be much simpler (would no longer be a weird
 concatMap) This may be a good idea / improve performance a smudge (prematureoptimzation much?)
 -}
-labelParams : QueryParams -> ( List ( String, OrderBy ), List ( String, Filter ), List ( String, Limit ) )
+labelParams : Parameters -> ( List ( String, OrderBy ), List ( String, Filter ), List ( String, Limit ) )
 labelParams =
     labelParamsHelper ""
 
