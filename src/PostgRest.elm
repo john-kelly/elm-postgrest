@@ -129,7 +129,8 @@ type OrderBy
 
 {-| -}
 type Limit
-    = Limit (Maybe Int)
+    = NoLimit
+    | LimitTo Int
 
 
 {-| -}
@@ -237,7 +238,7 @@ nullable (Field decoder urlEncoder name) =
 query : Resource uniq schema -> (a -> b) -> Query uniq schema (a -> b)
 query (Resource name schema) ctor =
     Query schema
-        (Parameters { name = name, select = [], filter = [], order = [], limit = Limit Nothing, embedded = [] })
+        (Parameters { name = name, select = [], filter = [], order = [], limit = NoLimit, embedded = [] })
         (Decode.succeed ctor)
 
 
@@ -270,13 +271,13 @@ select getField (Query schema (Parameters params) queryDecoder) =
 {-| -}
 limitTo : Int -> Limit
 limitTo limit =
-    Limit (Just limit)
+    LimitTo limit
 
 
 {-| -}
 noLimit : Limit
 noLimit =
-    Limit Nothing
+    NoLimit
 
 
 {-| -}
@@ -464,7 +465,7 @@ paginate { pageNumber, pageSize } url (Query _ (Parameters params) decoder) =
             }
 
         ( headers, queryUrl ) =
-            getHeadersAndQueryUrl settings url params.name (Parameters { params | limit = Limit (Just pageSize) })
+            getHeadersAndQueryUrl settings url params.name (Parameters { params | limit = (LimitTo pageSize) })
 
         handleResponse response =
             let
@@ -725,10 +726,10 @@ labeledLimitsToKeyValue limits =
         toKeyValue : ( String, Limit ) -> Maybe ( String, String )
         toKeyValue labeledLimit =
             case labeledLimit of
-                ( _, Limit Nothing ) ->
+                ( _, NoLimit ) ->
                     Nothing
 
-                ( prefix, Limit (Just limit) ) ->
+                ( prefix, LimitTo limit ) ->
                     Just ( prefix ++ "limit", toString limit )
     in
         List.filterMap toKeyValue limits
