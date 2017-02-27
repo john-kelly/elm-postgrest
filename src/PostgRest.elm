@@ -23,6 +23,7 @@ module PostgRest
         , include
         , includeMany
         , select
+        , hardcoded
         , order
         , filter
         , like
@@ -61,7 +62,7 @@ I recommend looking at the [examples](https://github.com/john-kelly/elm-postgres
 @docs Query, query
 
 ### Selecting and Nesting
-@docs select, include, includeMany
+@docs select, hardcoded, include, includeMany
 
 ### Filtering
 @docs Filter, filter, like, ilike, eq, gte, gt, lte, lt, inList, is, not
@@ -266,6 +267,14 @@ select getField (Query schema (Parameters params) queryDecoder) =
             Query schema
                 (Parameters { params | select = fieldName :: params.select })
                 (apply queryDecoder (Decode.field fieldName fieldDecoder))
+
+
+{-| -}
+hardcoded : a -> Query uniq schema (a -> b) -> Query uniq schema b
+hardcoded val (Query schema params queryDecoder) =
+    Query schema
+        params
+        (apply queryDecoder (Decode.succeed val))
 
 
 {-| -}
