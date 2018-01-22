@@ -7,19 +7,31 @@ import PostgRest as PG
         )
 
 
-getArticles : Request (List String)
+getArticles : Request (List Article)
 getArticles =
     PG.readAll articleSchema articleSelection
+
+
+type alias Article =
+    { title : String
+    , body : String
+    , favoritesCount : Int
+    }
 
 
 articleSelection :
     Selection
         { attributes
             | title : Attribute String
+            , body : Attribute String
+            , favoritesCount : Attribute String
         }
-        String
+        Article
 articleSelection =
-    PG.field .title
+    PG.map3 Article
+        (PG.field .title)
+        (PG.field .body)
+        (PG.field .favoritesCount)
 
 
 articleSchema :
