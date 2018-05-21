@@ -1,3 +1,3 @@
 create or replace view pokemons as
 
-select id from data.pokemon;
+select id, name, image from data.pokemon;

@@ -1,3 +1,3 @@
 create or replace view trainers as
 
-select id from data.trainer;
+select id, name, image from data.trainer;

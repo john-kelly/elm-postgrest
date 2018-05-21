@@ -27,5 +27,9 @@ begin;
 \ir authorization/roles.sql
 \ir authorization/privileges.sql
 
+insert into data.trainer values (1, 'Ash', 'https://8bitocrafts.files.wordpress.com/2013/03/pokemon-red-sprite2.jpg');
+insert into data.pokemon values (25, 'Pikachu', 'https://i.imgur.com/rPJT7Qa.png');
+insert into data.capture values (1, 100, 25, 1);
+
 commit;
 \echo # ==========================================
