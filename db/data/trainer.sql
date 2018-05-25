@@ -1,5 +1,5 @@
 create table trainer (
     id int primary key,
     name text not null,
-    image text
+    image text not null
 );
