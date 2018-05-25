@@ -157,7 +157,7 @@ type Selection attributes a
         (attributes
          ->
             { attributeNames : List String
-            , embeds : List Parameters
+            , embeds : List Embed
             , decoder : Decode.Decoder a
             }
         )
@@ -194,7 +194,10 @@ type Parameters
         , attributeNames : List String
         , cardinality : Cardinality
         }
-        (List Parameters)
+        (List Embed)
+
+
+type alias Embed = (String, Parameters)
 
 
 type Cardinality
@@ -403,6 +406,9 @@ type Condition attributes
         }
 
 
+-- TODO: potentially we don't want to remove the BooleanCond Bool so early
+-- i think that we want it still bc we need it to determine whether or not
+-- we return Just request or Nothing!
 type ConditionParameter
     = PrimitiveCondParam
         { negated : Bool
@@ -1488,7 +1494,7 @@ embedOne getRelationship (Schema schemaName attributes2) (Selection getSelection
     Selection <|
         \attributes1 ->
             let
-                (Relationship fk) =
+                (Relationship fkName) =
                     getRelationship attributes1
 
                 { attributeNames, embeds, decoder } =
@@ -1496,15 +1502,15 @@ embedOne getRelationship (Schema schemaName attributes2) (Selection getSelection
 
                 parameters =
                     Parameters
-                        { schemaName = fk
+                        { schemaName = schemaName
                         , attributeNames = attributeNames
                         , cardinality = One Nothing
                         }
                         embeds
             in
             { attributeNames = []
-            , embeds = [ parameters ]
-            , decoder = Decode.field fk decoder
+            , embeds = [ (fkName, parameters) ]
+            , decoder = Decode.field fkName decoder
             }
 
 
@@ -1523,7 +1529,7 @@ embedMany getRelationship (Schema schemaName attributes2) { select, where_, orde
     Selection <|
         \attributes1 ->
             let
-                (Relationship fkOrThrough) =
+                (Relationship fkOrThroughName) =
                     getRelationship attributes1
 
                 (Selection getSelection) =
@@ -1542,14 +1548,14 @@ embedMany getRelationship (Schema schemaName attributes2) { select, where_, orde
 
                 parameters =
                     Parameters
-                        { schemaName = schemaName ++ "." ++ fkOrThrough
+                        { schemaName = schemaName
                         , attributeNames = attributeNames
                         , cardinality = cardinality
                         }
                         embeds
             in
             { attributeNames = []
-            , embeds = [ parameters ]
+            , embeds = [ (fkOrThroughName, parameters) ]
             , decoder = Decode.field schemaName (Decode.list decoder)
             }
 
@@ -1824,7 +1830,7 @@ toSelectQueryParam (Parameters { attributeNames } embeds) =
         ( _, _ ) ->
             let
                 embedSelectStrings =
-                    List.map paramsToSelectString embeds
+                    List.map embedToSelectString embeds
 
                 selectStrings =
                     attributeNames ++ embedSelectStrings
@@ -1835,20 +1841,25 @@ toSelectQueryParam (Parameters { attributeNames } embeds) =
             Just <| Url.string "select" selectionString
 
 
-paramsToSelectString : Parameters -> String
-paramsToSelectString (Parameters { schemaName, attributeNames } embeds) =
+embedToSelectString : Embed -> String
+embedToSelectString (disambiguateName, (Parameters { schemaName, attributeNames, cardinality } embeds)) =
     let
         embedSelectStrings =
-            List.map paramsToSelectString embeds
+            List.map embedToSelectString embeds
 
         selectStrings =
             attributeNames ++ embedSelectStrings
 
         selectionString =
             String.join "," selectStrings
+
+        name =
+            case cardinality of
+                One _ -> disambiguateName
+                Many _ -> schemaName ++ "." ++ disambiguateName
     in
     String.concat
-        [ schemaName
+        [ name
         , "("
         , selectionString
         , ")"
@@ -1875,7 +1886,7 @@ type alias EmbedState =
     }
 
 
-embedsToQueryParams : List Parameters -> List (Maybe Url.QueryParameter)
+embedsToQueryParams : List Embed -> List (Maybe Url.QueryParameter)
 embedsToQueryParams embeds =
     let
         empty =
@@ -1892,11 +1903,16 @@ embedsToQueryParams embeds =
         |> List.concat
 
 
-embedToDictHelper : Parameters -> EmbedState -> EmbedState
-embedToDictHelper (Parameters { cardinality, schemaName } embeds) { embedPath, embedDict } =
+embedToDictHelper : Embed -> EmbedState -> EmbedState
+embedToDictHelper (disambiguateName, (Parameters { cardinality, schemaName } embeds)) { embedPath, embedDict } =
     let
         newEmbedPath =
-            schemaName :: embedPath
+            case cardinality of
+                Many _ ->
+                    -- TODO: need to also use disambiguateName?
+                    schemaName :: embedPath
+                One _ ->
+                    disambiguateName :: embedPath
 
         newEmbedDict =
             Dict.insert newEmbedPath cardinality embedDict
