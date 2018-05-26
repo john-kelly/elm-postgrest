@@ -59,26 +59,14 @@ trainerSelection :
         { attributes
             | image : Attribute String
             , name : Attribute String
-            , id : Attribute Int
             , pokemon : Relationship HasMany PokemonSchema
         }
         Trainer
 trainerSelection =
-    let
-        pokemonEmbed =
-            -- NOTE: could really use an embedAll here...
-            (PG.embedMany .pokemon pokemonSchema)
-                { select = pokemonSelection
-                , where_ = PG.true
-                , order = []
-                , limit = Nothing
-                , offset = Nothing
-                }
-    in
-        PG.map3 Trainer
-            (PG.field .name)
-            (PG.field .image)
-            pokemonEmbed
+    PG.map3 Trainer
+        (PG.field .name)
+        (PG.field .image)
+        (PG.embedAll .pokemon pokemonSchema pokemonSelection)
 
 
 type PokemonSchema

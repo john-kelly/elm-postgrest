@@ -27,6 +27,7 @@ module PostgRest
         , deleteMany
         , deleteOne
         , desc
+        , embedAll
         , embedMany
         , embedOne
         , eq
@@ -197,7 +198,8 @@ type Parameters
         (List Embed)
 
 
-type alias Embed = (String, Parameters)
+type alias Embed =
+    ( String, Parameters )
 
 
 type Cardinality
@@ -406,9 +408,12 @@ type Condition attributes
         }
 
 
+
 -- TODO: potentially we don't want to remove the BooleanCond Bool so early
 -- i think that we want it still bc we need it to determine whether or not
 -- we return Just request or Nothing!
+
+
 type ConditionParameter
     = PrimitiveCondParam
         { negated : Bool
@@ -450,13 +455,13 @@ conditionToParam attributes cond =
                 { key, value } =
                     getKeyValue attributes
             in
-            Just <|
-                PrimitiveCondParam
-                    { negated = negated
-                    , operator = operator
-                    , key = key
-                    , value = value
-                    }
+                Just <|
+                    PrimitiveCondParam
+                        { negated = negated
+                        , operator = operator
+                        , key = key
+                        , value = value
+                        }
 
         CombinationCond { negated, operator, conditions } ->
             Just <|
@@ -493,7 +498,7 @@ ordersToMaybeParams attributes orders =
                 restParams =
                     List.map (orderToParam attributes) rest
             in
-            Just ( firstParam, restParams )
+                Just ( firstParam, restParams )
 
 
 directionToString : Direction -> String
@@ -539,7 +544,7 @@ orderParamToQueryParam embedPath ( firstOrder, restOrders ) =
                 |> List.map orderDataToString
                 |> String.join ","
     in
-    Url.string queryKey queryValue
+        Url.string queryKey queryValue
 
 
 conditionParamToQueryParam : List String -> ConditionParameter -> Url.QueryParameter
@@ -563,7 +568,7 @@ conditionParamToQueryParam embedPath conditionParam =
                         , value
                         ]
             in
-            Url.string queryKey queryValue
+                Url.string queryKey queryValue
 
         CombinationCondParam { negated, operator, conditions } ->
             let
@@ -586,7 +591,7 @@ conditionParamToQueryParam embedPath conditionParam =
                         |> List.map conditionParamToString
                         |> String.join ","
             in
-            Url.string negatedQueryKey ("(" ++ queryValue ++ ")")
+                Url.string negatedQueryKey ("(" ++ queryValue ++ ")")
 
 
 limitParamToQueryParam : List String -> Int -> Url.QueryParameter
@@ -600,7 +605,7 @@ limitParamToQueryParam embedPath limit =
         queryValue =
             toString limit
     in
-    Url.string queryKey queryValue
+        Url.string queryKey queryValue
 
 
 offsetParamToQueryParam : List String -> Int -> Url.QueryParameter
@@ -614,7 +619,7 @@ offsetParamToQueryParam embedPath offset =
         queryValue =
             toString offset
     in
-    Url.string queryKey queryValue
+        Url.string queryKey queryValue
 
 
 conditionParamToString : ConditionParameter -> String
@@ -788,12 +793,12 @@ nullable (Attribute { name, decoder, encoder, urlEncoder }) =
                 Nothing ->
                     Encode.null
     in
-    Attribute
-        { name = name
-        , decoder = Decode.nullable decoder
-        , encoder = newJsonEncoder
-        , urlEncoder = newUrlEncoder
-        }
+        Attribute
+            { name = name
+            , decoder = Decode.nullable decoder
+            , encoder = newJsonEncoder
+            , urlEncoder = newUrlEncoder
+            }
 
 
 {-| FIXME: implemented quickly to get things working
@@ -807,12 +812,12 @@ list (Attribute { name, decoder, encoder, urlEncoder }) =
         newJsonEncoder listOfA =
             Encode.list (List.map encoder listOfA)
     in
-    Attribute
-        { name = name
-        , decoder = Decode.list decoder
-        , encoder = newJsonEncoder
-        , urlEncoder = newUrlEncoder
-        }
+        Attribute
+            { name = name
+            , decoder = Decode.list decoder
+            , encoder = newJsonEncoder
+            , urlEncoder = newUrlEncoder
+            }
 
 
 {-| -}
@@ -827,15 +832,15 @@ condHelper operator value getAttribute =
                 valueString =
                     urlEncoder value
             in
-            { key = name
-            , value = valueString
-            }
+                { key = name
+                , value = valueString
+                }
     in
-    PrimitiveCond
-        { negated = False
-        , operator = operator
-        , getKeyValue = getKeyValue
-        }
+        PrimitiveCond
+            { negated = False
+            , operator = operator
+            , getKeyValue = getKeyValue
+            }
 
 
 {-| Simple [pattern matching](https://www.postgresql.org/docs/9.5/static/functions-matching.html#FUNCTIONS-LIKE)
@@ -914,15 +919,15 @@ cs values getAttribute =
                 valueString =
                     urlEncoder values
             in
-            { key = name
-            , value = valueString
-            }
+                { key = name
+                , value = valueString
+                }
     in
-    PrimitiveCond
-        { negated = False
-        , operator = Cs
-        , getKeyValue = getKeyValue
-        }
+        PrimitiveCond
+            { negated = False
+            , operator = Cs
+            , getKeyValue = getKeyValue
+            }
 
 
 {-| Negate a Condition
@@ -1078,11 +1083,11 @@ updateOne (Schema name attributes) { change, where_, select } =
                 }
                 embeds
     in
-    Update
-        { parameters = parameters
-        , decoder = decoder
-        , value = Encode.object (toKeyValuePairs attributes)
-        }
+        Update
+            { parameters = parameters
+            , decoder = decoder
+            , value = Encode.object (toKeyValuePairs attributes)
+            }
 
 
 updateMany :
@@ -1123,11 +1128,11 @@ updateMany (Schema name attributes) { change, where_, select, offset, limit, ord
                 }
                 embeds
     in
-    Update
-        { parameters = parameters
-        , decoder = Decode.list decoder
-        , value = Encode.object (toKeyValuePairs attributes)
-        }
+        Update
+            { parameters = parameters
+            , decoder = Decode.list decoder
+            , value = Encode.object (toKeyValuePairs attributes)
+            }
 
 
 createOne :
@@ -1156,11 +1161,11 @@ createOne (Schema name attributes) { change, select } =
                 }
                 embeds
     in
-    Create
-        { parameters = parameters
-        , decoder = decoder
-        , value = Encode.object (toKeyValuePairs attributes)
-        }
+        Create
+            { parameters = parameters
+            , decoder = decoder
+            , value = Encode.object (toKeyValuePairs attributes)
+            }
 
 
 createMany :
@@ -1204,11 +1209,11 @@ createMany (Schema name attributes) { change, select, where_, limit, offset, ord
                 }
                 embeds
     in
-    Create
-        { parameters = parameters
-        , decoder = Decode.list decoder
-        , value = jsonValue
-        }
+        Create
+            { parameters = parameters
+            , decoder = Decode.list decoder
+            , value = jsonValue
+            }
 
 
 deleteOne :
@@ -1234,10 +1239,10 @@ deleteOne (Schema name attributes) { where_, select } =
                 }
                 embeds
     in
-    Delete
-        { parameters = parameters
-        , decoder = decoder
-        }
+        Delete
+            { parameters = parameters
+            , decoder = decoder
+            }
 
 
 deleteMany :
@@ -1274,10 +1279,10 @@ deleteMany (Schema name attributes) { where_, select, limit, offset, order } =
                 }
                 embeds
     in
-    Delete
-        { parameters = parameters
-        , decoder = Decode.list decoder
-        }
+        Delete
+            { parameters = parameters
+            , decoder = Decode.list decoder
+            }
 
 
 readOne :
@@ -1306,10 +1311,10 @@ readOne from { select, where_ } =
                 }
                 embeds
     in
-    Read
-        { parameters = parameters
-        , decoder = decoder
-        }
+        Read
+            { parameters = parameters
+            , decoder = decoder
+            }
 
 
 {-| -}
@@ -1350,10 +1355,10 @@ readMany from { select, where_, offset, limit, order } =
                 }
                 embeds
     in
-    Read
-        { parameters = parameters
-        , decoder = Decode.list decoder
-        }
+        Read
+            { parameters = parameters
+            , decoder = Decode.list decoder
+            }
 
 
 {-| -}
@@ -1392,10 +1397,10 @@ readFirst from { select, where_, order } =
                 }
                 embeds
     in
-    Read
-        { parameters = parameters
-        , decoder = Decode.map List.head (Decode.list decoder)
-        }
+        Read
+            { parameters = parameters
+            , decoder = Decode.map List.head (Decode.list decoder)
+            }
 
 
 {-| -}
@@ -1461,14 +1466,14 @@ readPage from { select, where_, size, page, order } =
                 jsonResult =
                     Decode.decodeString (Decode.list decoder) response.body
             in
-            Result.map2 (\data count -> { data = data, count = count })
-                jsonResult
-                countResult
+                Result.map2 (\data count -> { data = data, count = count })
+                    jsonResult
+                    countResult
     in
-    Page
-        { parameters = parameters
-        , expect = Http.expectStringResponse handleResponse
-        }
+        Page
+            { parameters = parameters
+            , expect = Http.expectStringResponse handleResponse
+            }
 
 
 field : (attributes -> Attribute a) -> Selection attributes a
@@ -1479,10 +1484,10 @@ field getter =
                 (Attribute { decoder, name }) =
                     getter attributes
             in
-            { attributeNames = [ name ]
-            , embeds = []
-            , decoder = Decode.field name decoder
-            }
+                { attributeNames = [ name ]
+                , embeds = []
+                , decoder = Decode.field name decoder
+                }
 
 
 embedOne :
@@ -1508,10 +1513,25 @@ embedOne getRelationship (Schema schemaName attributes2) (Selection getSelection
                         }
                         embeds
             in
-            { attributeNames = []
-            , embeds = [ (fkName, parameters) ]
-            , decoder = Decode.field fkName decoder
-            }
+                { attributeNames = []
+                , embeds = [ ( fkName, parameters ) ]
+                , decoder = Decode.field fkName decoder
+                }
+
+
+embedAll :
+    (attributes1 -> Relationship HasMany id)
+    -> Schema id attributes2
+    -> Selection attributes2 a
+    -> Selection attributes1 (List a)
+embedAll getRelationship schema selection =
+    (embedMany getRelationship schema)
+        { select = selection
+        , where_ = true
+        , order = []
+        , limit = Nothing
+        , offset = Nothing
+        }
 
 
 embedMany :
@@ -1554,10 +1574,10 @@ embedMany getRelationship (Schema schemaName attributes2) { select, where_, orde
                         }
                         embeds
             in
-            { attributeNames = []
-            , embeds = [ (fkOrThroughName, parameters) ]
-            , decoder = Decode.field schemaName (Decode.list decoder)
-            }
+                { attributeNames = []
+                , embeds = [ ( fkOrThroughName, parameters ) ]
+                , decoder = Decode.field schemaName (Decode.list decoder)
+                }
 
 
 {-| -}
@@ -1584,7 +1604,7 @@ map fn (Selection getSelection) =
                 selection =
                     getSelection attributes
             in
-            { selection | decoder = Decode.map fn selection.decoder }
+                { selection | decoder = Decode.map fn selection.decoder }
 
 
 map2 : (a -> b -> c) -> Selection attributes a -> Selection attributes b -> Selection attributes c
@@ -1598,10 +1618,10 @@ map2 fn (Selection getSelectionA) (Selection getSelectionB) =
                 selectionB =
                     getSelectionB attributes
             in
-            { attributeNames = selectionA.attributeNames ++ selectionB.attributeNames
-            , embeds = selectionA.embeds ++ selectionB.embeds
-            , decoder = Decode.map2 fn selectionA.decoder selectionB.decoder
-            }
+                { attributeNames = selectionA.attributeNames ++ selectionB.attributeNames
+                , embeds = selectionA.embeds ++ selectionB.embeds
+                , decoder = Decode.map2 fn selectionA.decoder selectionB.decoder
+                }
 
 
 map3 :
@@ -1717,64 +1737,64 @@ toHttpRequest { url, timeout, token } request =
                 Nothing ->
                     ( [], False )
     in
-    case request of
-        Read { parameters, decoder } ->
-            Http.request
-                { method = "GET"
-                , headers = parametersToHeaders parameters ++ authHeaders
-                , url = parametersToUrl url parameters
-                , body = Http.emptyBody
-                , expect = Http.expectJson decoder
-                , timeout = timeout
-                , withCredentials = withCredentials
-                }
+        case request of
+            Read { parameters, decoder } ->
+                Http.request
+                    { method = "GET"
+                    , headers = parametersToHeaders parameters ++ authHeaders
+                    , url = parametersToUrl url parameters
+                    , body = Http.emptyBody
+                    , expect = Http.expectJson decoder
+                    , timeout = timeout
+                    , withCredentials = withCredentials
+                    }
 
-        Page { parameters, expect } ->
-            Http.request
-                { method = "GET"
-                , headers =
-                    parametersToHeaders parameters
-                        ++ authHeaders
-                        ++ [ Http.header "Prefer" "count=exact" ]
-                , url = parametersToUrl url parameters
-                , body = Http.emptyBody
-                , expect = expect
-                , timeout = timeout
-                , withCredentials = withCredentials
-                }
+            Page { parameters, expect } ->
+                Http.request
+                    { method = "GET"
+                    , headers =
+                        parametersToHeaders parameters
+                            ++ authHeaders
+                            ++ [ Http.header "Prefer" "count=exact" ]
+                    , url = parametersToUrl url parameters
+                    , body = Http.emptyBody
+                    , expect = expect
+                    , timeout = timeout
+                    , withCredentials = withCredentials
+                    }
 
-        Update { parameters, decoder, value } ->
-            Http.request
-                { method = "PATCH"
-                , headers = parametersToHeaders parameters ++ authHeaders
-                , url = parametersToUrl url parameters
-                , body = Http.jsonBody value
-                , expect = Http.expectJson decoder
-                , timeout = timeout
-                , withCredentials = withCredentials
-                }
+            Update { parameters, decoder, value } ->
+                Http.request
+                    { method = "PATCH"
+                    , headers = parametersToHeaders parameters ++ authHeaders
+                    , url = parametersToUrl url parameters
+                    , body = Http.jsonBody value
+                    , expect = Http.expectJson decoder
+                    , timeout = timeout
+                    , withCredentials = withCredentials
+                    }
 
-        Create { parameters, decoder, value } ->
-            Http.request
-                { method = "POST"
-                , headers = parametersToHeaders parameters ++ authHeaders
-                , url = parametersToUrl url parameters
-                , body = Http.jsonBody value
-                , expect = Http.expectJson decoder
-                , timeout = timeout
-                , withCredentials = withCredentials
-                }
+            Create { parameters, decoder, value } ->
+                Http.request
+                    { method = "POST"
+                    , headers = parametersToHeaders parameters ++ authHeaders
+                    , url = parametersToUrl url parameters
+                    , body = Http.jsonBody value
+                    , expect = Http.expectJson decoder
+                    , timeout = timeout
+                    , withCredentials = withCredentials
+                    }
 
-        Delete { parameters, decoder } ->
-            Http.request
-                { method = "DELETE"
-                , headers = parametersToHeaders parameters ++ authHeaders
-                , url = parametersToUrl url parameters
-                , body = Http.emptyBody
-                , expect = Http.expectJson decoder
-                , timeout = timeout
-                , withCredentials = withCredentials
-                }
+            Delete { parameters, decoder } ->
+                Http.request
+                    { method = "DELETE"
+                    , headers = parametersToHeaders parameters ++ authHeaders
+                    , url = parametersToUrl url parameters
+                    , body = Http.emptyBody
+                    , expect = Http.expectJson decoder
+                    , timeout = timeout
+                    , withCredentials = withCredentials
+                    }
 
 
 parametersToHeaders : Parameters -> List Http.Header
@@ -1818,7 +1838,7 @@ parametersToUrl prePath ((Parameters { cardinality, schemaName, attributeNames }
         allQueryParams =
             List.filterMap identity (topLevelQueryParams ++ embedLevelQueryParams)
     in
-    Url.crossOrigin prePath [ schemaName ] allQueryParams
+        Url.crossOrigin prePath [ schemaName ] allQueryParams
 
 
 toSelectQueryParam : Parameters -> Maybe Url.QueryParameter
@@ -1838,11 +1858,11 @@ toSelectQueryParam (Parameters { attributeNames } embeds) =
                 selectionString =
                     String.join "," selectStrings
             in
-            Just <| Url.string "select" selectionString
+                Just <| Url.string "select" selectionString
 
 
 embedToSelectString : Embed -> String
-embedToSelectString (disambiguateName, (Parameters { schemaName, attributeNames, cardinality } embeds)) =
+embedToSelectString ( disambiguateName, Parameters { schemaName, attributeNames, cardinality } embeds ) =
     let
         embedSelectStrings =
             List.map embedToSelectString embeds
@@ -1855,15 +1875,18 @@ embedToSelectString (disambiguateName, (Parameters { schemaName, attributeNames,
 
         name =
             case cardinality of
-                One _ -> disambiguateName
-                Many _ -> schemaName ++ "." ++ disambiguateName
+                One _ ->
+                    disambiguateName
+
+                Many _ ->
+                    schemaName ++ "." ++ disambiguateName
     in
-    String.concat
-        [ name
-        , "("
-        , selectionString
-        , ")"
-        ]
+        String.concat
+            [ name
+            , "("
+            , selectionString
+            , ")"
+            ]
 
 
 toCardinalityQueryParams : ( List String, Cardinality ) -> List (Maybe Url.QueryParameter)
@@ -1897,20 +1920,21 @@ embedsToQueryParams embeds =
         { embedDict } =
             List.foldl embedToDictHelper empty embeds
     in
-    embedDict
-        |> Dict.toList
-        |> List.map toCardinalityQueryParams
-        |> List.concat
+        embedDict
+            |> Dict.toList
+            |> List.map toCardinalityQueryParams
+            |> List.concat
 
 
 embedToDictHelper : Embed -> EmbedState -> EmbedState
-embedToDictHelper (disambiguateName, (Parameters { cardinality, schemaName } embeds)) { embedPath, embedDict } =
+embedToDictHelper ( disambiguateName, Parameters { cardinality, schemaName } embeds ) { embedPath, embedDict } =
     let
         newEmbedPath =
             case cardinality of
                 Many _ ->
                     -- TODO: need to also use disambiguateName?
                     schemaName :: embedPath
+
                 One _ ->
                     disambiguateName :: embedPath
 
@@ -1922,4 +1946,4 @@ embedToDictHelper (disambiguateName, (Parameters { cardinality, schemaName } emb
             , embedDict = newEmbedDict
             }
     in
-    List.foldl embedToDictHelper newState embeds
+        List.foldl embedToDictHelper newState embeds
