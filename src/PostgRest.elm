@@ -121,8 +121,6 @@ import Dict exposing (Dict)
 import Http
 import Json.Decode as Decode
 import Json.Encode as Encode
-import Regex
-import Time
 import Url
 
 
@@ -1726,7 +1724,7 @@ map8 fn selectionA selectionB selectionC selectionD selectionE selectionF select
         |> andMap selectionH
 
 
-toHttpRequest : { timeout : Maybe Time.Time, token : Maybe String, url : String } -> Request a -> Http.Request a
+toHttpRequest : { timeout : Maybe Float, token : Maybe String, url : String } -> Request a -> Http.Request a
 toHttpRequest { url, timeout, token } request =
     let
         ( authHeaders, withCredentials ) =
