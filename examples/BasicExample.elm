@@ -1,5 +1,9 @@
 module BasicExample exposing (..)
 
+import Browser
+import Html exposing (Html, div, img)
+import Html.Attributes exposing (src)
+import Http
 import PostgRest as PG
     exposing
         ( Attribute
@@ -7,9 +11,6 @@ import PostgRest as PG
         , Schema
         , Selection
         )
-import Html exposing (Html, img, div)
-import Html.Attributes exposing (src)
-import Http
 
 
 getPokemon : Cmd Msg
@@ -65,21 +66,29 @@ update msg model =
             ( model, Cmd.none )
 
 
-view : Model -> Html Msg
-view model =
-    div [] (List.map viewPokemon model)
-
-
 viewPokemon : String -> Html Msg
 viewPokemon url =
     img [ src url ] []
 
 
-main : Program Never Model Msg
+view : Model -> Html Msg
+view model =
+    div [] (List.map viewPokemon model)
+
+
+page : Model -> { title : String, body : List (Html Msg) }
+page model =
+    { title = "Basic Example"
+    , body = [ view model ]
+    }
+
+
+main : Program () Model Msg
 main =
-    Html.program
-        { init = ( [], getPokemon )
-        , view = view
+    Browser.fullscreen
+        { init = \_ -> ( [], getPokemon )
+        , view = page
         , update = update
+        , onNavigation = Nothing
         , subscriptions = \_ -> Sub.none
         }

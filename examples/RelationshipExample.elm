@@ -1,17 +1,18 @@
 module RelationshipExample exposing (..)
 
+import Browser
+import Html exposing (Html, div, img, text)
+import Html.Attributes exposing (src, style)
+import Http
 import PostgRest as PG
     exposing
         ( Attribute
+        , HasMany
+        , Relationship
         , Request
         , Schema
         , Selection
-        , Relationship
-        , HasMany
         )
-import Html exposing (Html, img, div, text)
-import Html.Attributes exposing (src, style)
-import Http
 
 
 getTrainers : Cmd Msg
@@ -121,36 +122,44 @@ update msg model =
             ( model, Cmd.none )
 
 
-view : Model -> Html Msg
-view model =
-    div [] (List.map viewTrainer model)
-
-
 viewTrainer : Trainer -> Html Msg
 viewTrainer trainer =
     div []
-        [ div [ style [ ( "display", "inline-block" ), ( "vertical-align", "middle" ) ] ]
-            [ div [ style [ ( "text-align", "center" ) ] ] [ text trainer.name ]
+        [ div [ style "display" "inline-block", style "vertical-align" "middle" ]
+            [ div [ style "text-align" "center" ] [ text trainer.name ]
             , img [ src trainer.image ] []
             ]
-        , div [ style [ ( "display", "inline-block" ), ( "vertical-align", "middle" ) ] ]
+        , div [ style "display" "inline-block", style "vertical-align" "middle" ]
             (List.map viewPokemon trainer.pokemon)
         ]
 
 
 viewPokemon : Pokemon -> Html Msg
 viewPokemon pokemon =
-    div [ style [ ( "display", "inline-block" ) ] ]
+    div [ style "display" "inline-block" ]
         [ img [ src pokemon.image ] []
-        , div [ style [ ( "text-align", "center" ) ] ] [ text ("#" ++ toString pokemon.id ++ ": " ++ pokemon.name) ]
+        , div [ style "text-align" "center" ] [ text ("#" ++ String.fromInt pokemon.id ++ ": " ++ pokemon.name) ]
         ]
 
 
-main : Program Never Model Msg
+view : Model -> Html Msg
+view model =
+    div [] (List.map viewTrainer model)
+
+
+page : Model -> { title : String, body : List (Html Msg) }
+page model =
+    { title = "Relationship Example"
+    , body = [ view model ]
+    }
+
+
+main : Program () Model Msg
 main =
-    Html.program
-        { init = ( [], getTrainers )
-        , view = view
+    Browser.fullscreen
+        { init = \_ -> ( [], getTrainers )
+        , view = page
         , update = update
+        , onNavigation = Nothing
         , subscriptions = \_ -> Sub.none
         }

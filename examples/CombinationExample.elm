@@ -1,5 +1,9 @@
 module CombinationExample exposing (..)
 
+import Browser
+import Html exposing (Html, div, img, text)
+import Html.Attributes exposing (src, style)
+import Http
 import PostgRest as PG
     exposing
         ( Attribute
@@ -7,9 +11,6 @@ import PostgRest as PG
         , Schema
         , Selection
         )
-import Html exposing (Html, img, div, text)
-import Html.Attributes exposing (src, style)
-import Http
 
 
 getPokemon : Cmd Msg
@@ -77,24 +78,32 @@ update msg model =
             ( model, Cmd.none )
 
 
+viewPokemon : Pokemon -> Html Msg
+viewPokemon pokemon =
+    div [ style "display" "inline-block" ]
+        [ img [ src pokemon.image ] []
+        , div [ style "text-align" "center" ] [ text ("#" ++ String.fromInt pokemon.id ++ ": " ++ pokemon.name) ]
+        ]
+
+
 view : Model -> Html Msg
 view model =
     div [] (List.map viewPokemon model)
 
 
-viewPokemon : Pokemon -> Html Msg
-viewPokemon pokemon =
-    div [ style [ ( "display", "inline-block" ) ] ]
-        [ img [ src pokemon.image ] []
-        , div [ style [ ( "text-align", "center" ) ] ] [ text ("#" ++ toString pokemon.id ++ ": " ++ pokemon.name) ]
-        ]
+page : Model -> { title : String, body : List (Html Msg) }
+page model =
+    { title = "Combination Example"
+    , body = [ view model ]
+    }
 
 
-main : Program Never Model Msg
+main : Program () Model Msg
 main =
-    Html.program
-        { init = ( [], getPokemon )
-        , view = view
+    Browser.fullscreen
+        { init = \_ -> ( [], getPokemon )
+        , view = page
         , update = update
+        , onNavigation = Nothing
         , subscriptions = \_ -> Sub.none
         }
