@@ -23,7 +23,6 @@ module PostgRest
         , change
         , createMany
         , createOne
-        , cs
         , deleteMany
         , deleteOne
         , desc
@@ -43,7 +42,6 @@ module PostgRest
         , int
         , is
         , like
-        , list
         , lt
         , lte
         , map
@@ -201,10 +199,10 @@ type alias Embed =
 
 
 type Cardinality
-    = One (Maybe ConditionParameter)
+    = One (Result Bool Condition_)
     | Many
-        { order : Maybe OrderParameters
-        , where_ : Maybe ConditionParameter
+        { order : Maybe Orders
+        , where_ : Result Bool Condition_
         , limit : Maybe Int
         , offset : Maybe Int
         }
@@ -239,16 +237,16 @@ type Order attributes
         }
 
 
-type OrderParameter
-    = OrderParameter
+type Order_
+    = Order_
         { direction : Direction
         , nulls : Nulls
         , key : String
         }
 
 
-type alias OrderParameters =
-    ( OrderParameter, List OrderParameter )
+type alias Orders =
+    ( Order_, List Order_ )
 
 
 
@@ -393,36 +391,30 @@ type BinaryLogicalOperator
 
 
 type Condition attributes
-    = BooleanCond Bool
-    | PrimitiveCond
+    = CBoolean Bool
+    | COperator
         { negated : Bool
         , operator : Operator
         , getKeyValue : attributes -> { key : String, value : String }
         }
-    | CombinationCond
+    | CCombine
         { negated : Bool
         , operator : BinaryLogicalOperator
         , conditions : List (Condition attributes)
         }
 
 
-
--- TODO: potentially we don't want to remove the BooleanCond Bool so early
--- i think that we want it still bc we need it to determine whether or not
--- we return Just request or Nothing!
-
-
-type ConditionParameter
-    = PrimitiveCondParam
+type Condition_
+    = COperator_
         { negated : Bool
         , operator : Operator
         , key : String
         , value : String
         }
-    | CombinationCondParam
+    | CCombine_
         { negated : Bool
         , operator : BinaryLogicalOperator
-        , conditions : List ConditionParameter
+        , conditions : List Condition_
         }
 
 
@@ -445,45 +437,45 @@ type ConditionParameter
 -}
 
 
-conditionToParam : attributes -> Condition attributes -> Maybe ConditionParameter
-conditionToParam attributes cond =
+applyCondition : attributes -> Condition attributes -> Result Bool Condition_
+applyCondition attributes cond =
     case cond of
-        PrimitiveCond { negated, operator, getKeyValue } ->
+        COperator { negated, operator, getKeyValue } ->
             let
                 { key, value } =
                     getKeyValue attributes
             in
-                Just <|
-                    PrimitiveCondParam
+                Ok <|
+                    COperator_
                         { negated = negated
                         , operator = operator
                         , key = key
                         , value = value
                         }
 
-        CombinationCond { negated, operator, conditions } ->
-            Just <|
-                CombinationCondParam
+        CCombine { negated, operator, conditions } ->
+            Ok <|
+                CCombine_
                     { negated = negated
                     , operator = operator
-                    , conditions = List.filterMap (conditionToParam attributes) conditions
+                    , conditions = List.filterMap (applyCondition attributes >> Result.toMaybe) conditions
                     }
 
-        BooleanCond _ ->
-            Nothing
+        CBoolean bool ->
+            Err bool
 
 
-orderToParam : attributes -> Order attributes -> OrderParameter
-orderToParam attributes (Order { direction, nulls, getKey }) =
-    OrderParameter
+applyOrder : attributes -> Order attributes -> Order_
+applyOrder attributes (Order { direction, nulls, getKey }) =
+    Order_
         { direction = direction
         , nulls = nulls
         , key = getKey attributes
         }
 
 
-ordersToMaybeParams : attributes -> List (Order attributes) -> Maybe OrderParameters
-ordersToMaybeParams attributes orders =
+applyOrders : attributes -> List (Order attributes) -> Maybe Orders
+applyOrders attributes orders =
     case orders of
         [] ->
             Nothing
@@ -491,10 +483,10 @@ ordersToMaybeParams attributes orders =
         first :: rest ->
             let
                 firstParam =
-                    orderToParam attributes first
+                    applyOrder attributes first
 
                 restParams =
-                    List.map (orderToParam attributes) rest
+                    List.map (applyOrder attributes) rest
             in
                 Just ( firstParam, restParams )
 
@@ -519,10 +511,10 @@ nullsToString nulls =
             "nullslast"
 
 
-orderParamToQueryParam : List String -> OrderParameters -> Url.QueryParameter
-orderParamToQueryParam embedPath ( firstOrder, restOrders ) =
+ordersToQueryParameter : List String -> Orders -> Url.QueryParameter
+ordersToQueryParameter embedPath ( firstOrder, restOrders ) =
     let
-        orderParams =
+        orders =
             firstOrder :: restOrders
 
         queryKey =
@@ -530,7 +522,7 @@ orderParamToQueryParam embedPath ( firstOrder, restOrders ) =
                 |> List.reverse
                 |> String.join "."
 
-        orderDataToString (OrderParameter { direction, nulls, key }) =
+        orderDataToString (Order_ { direction, nulls, key }) =
             String.join "."
                 [ key
                 , directionToString direction
@@ -538,17 +530,17 @@ orderParamToQueryParam embedPath ( firstOrder, restOrders ) =
                 ]
 
         queryValue =
-            orderParams
+            orders
                 |> List.map orderDataToString
                 |> String.join ","
     in
         Url.string queryKey queryValue
 
 
-conditionParamToQueryParam : List String -> ConditionParameter -> Url.QueryParameter
-conditionParamToQueryParam embedPath conditionParam =
-    case conditionParam of
-        PrimitiveCondParam { negated, operator, key, value } ->
+conditionToQueryParameter : List String -> Condition_ -> Url.QueryParameter
+conditionToQueryParameter embedPath condition =
+    case condition of
+        COperator_ { negated, operator, key, value } ->
             let
                 queryKey =
                     (key :: embedPath)
@@ -568,7 +560,7 @@ conditionParamToQueryParam embedPath conditionParam =
             in
                 Url.string queryKey queryValue
 
-        CombinationCondParam { negated, operator, conditions } ->
+        CCombine_ { negated, operator, conditions } ->
             let
                 binOpString =
                     binaryLogicalOperatorToString operator
@@ -586,14 +578,14 @@ conditionParamToQueryParam embedPath conditionParam =
 
                 queryValue =
                     conditions
-                        |> List.map conditionParamToString
+                        |> List.map conditionToString
                         |> String.join ","
             in
                 Url.string negatedQueryKey ("(" ++ queryValue ++ ")")
 
 
-limitParamToQueryParam : List String -> Int -> Url.QueryParameter
-limitParamToQueryParam embedPath limit =
+limitToQueryParameter : List String -> Int -> Url.QueryParameter
+limitToQueryParameter embedPath limit =
     let
         queryKey =
             ("limit" :: embedPath)
@@ -606,8 +598,8 @@ limitParamToQueryParam embedPath limit =
         Url.string queryKey queryValue
 
 
-offsetParamToQueryParam : List String -> Int -> Url.QueryParameter
-offsetParamToQueryParam embedPath offset =
+offsetToQueryParameter : List String -> Int -> Url.QueryParameter
+offsetToQueryParameter embedPath offset =
     let
         queryKey =
             ("offset" :: embedPath)
@@ -620,10 +612,10 @@ offsetParamToQueryParam embedPath offset =
         Url.string queryKey queryValue
 
 
-conditionParamToString : ConditionParameter -> String
-conditionParamToString conditionParam =
-    case conditionParam of
-        PrimitiveCondParam { negated, operator, key, value } ->
+conditionToString : Condition_ -> String
+conditionToString condition =
+    case condition of
+        COperator_ { negated, operator, key, value } ->
             String.concat
                 [ key
                 , "."
@@ -636,7 +628,7 @@ conditionParamToString conditionParam =
                 , value
                 ]
 
-        CombinationCondParam { negated, operator, conditions } ->
+        CCombine_ { negated, operator, conditions } ->
             String.concat
                 [ if negated then
                     "not."
@@ -645,7 +637,7 @@ conditionParamToString conditionParam =
                 , binaryLogicalOperatorToString operator
                 , "("
                 , conditions
-                    |> List.map conditionParamToString
+                    |> List.map conditionToString
                     |> String.join ","
                 , ")"
                 ]
@@ -799,25 +791,6 @@ nullable (Attribute { name, decoder, encoder, urlEncoder }) =
             }
 
 
-{-| FIXME: implemented quickly to get things working
--}
-list : Attribute a -> Attribute (List a)
-list (Attribute { name, decoder, encoder, urlEncoder }) =
-    let
-        newUrlEncoder listOfA =
-            "{" ++ String.join "," (List.map urlEncoder listOfA) ++ "}"
-
-        newJsonEncoder listOfA =
-            Encode.list (List.map encoder listOfA)
-    in
-        Attribute
-            { name = name
-            , decoder = Decode.list decoder
-            , encoder = newJsonEncoder
-            , urlEncoder = newUrlEncoder
-            }
-
-
 {-| -}
 condHelper : Operator -> a -> (attributes -> Attribute a) -> Condition attributes
 condHelper operator value getAttribute =
@@ -834,7 +807,7 @@ condHelper operator value getAttribute =
                 , value = valueString
                 }
     in
-        PrimitiveCond
+        COperator
             { negated = False
             , operator = operator
             , getKeyValue = getKeyValue
@@ -904,49 +877,25 @@ is =
     condHelper Is
 
 
-{-| Contains FIXME: implemented quickly to get things working
--}
-cs : List a -> (attributes -> Attribute (List a)) -> Condition attributes
-cs values getAttribute =
-    let
-        getKeyValue attributes =
-            let
-                (Attribute { urlEncoder, name }) =
-                    getAttribute attributes
-
-                valueString =
-                    urlEncoder values
-            in
-                { key = name
-                , value = valueString
-                }
-    in
-        PrimitiveCond
-            { negated = False
-            , operator = Cs
-            , getKeyValue = getKeyValue
-            }
-
-
 {-| Negate a Condition
 -}
 not : Condition attributes -> Condition attributes
 not cond =
     case cond of
-        PrimitiveCond primitive ->
-            PrimitiveCond { primitive | negated = Basics.not primitive.negated }
+        COperator op ->
+            COperator { op | negated = Basics.not op.negated }
 
-        CombinationCond combination ->
-            CombinationCond { combination | negated = Basics.not combination.negated }
+        CCombine comb ->
+            CCombine { comb | negated = Basics.not comb.negated }
 
-        BooleanCond bool ->
-            BooleanCond (Basics.not bool)
+        CBoolean bool ->
+            CBoolean (Basics.not bool)
 
 
 isTrueCond : Condition attributes -> Bool
 isTrueCond cond =
     case cond of
-        BooleanCond True ->
+        CBoolean True ->
             True
 
         _ ->
@@ -956,7 +905,7 @@ isTrueCond cond =
 isFalseCond : Condition attributes -> Bool
 isFalseCond cond =
     case cond of
-        BooleanCond False ->
+        CBoolean False ->
             True
 
         _ ->
@@ -965,7 +914,7 @@ isFalseCond cond =
 
 
 -- Why not just use List.member TrueCond or List.member FalseCond? Well. The
--- Condition type can have functions stored in them (in the case of PrimitiveCond),
+-- Condition type can have functions stored in them (in the case of COperator),
 -- so I've made these helpers to avoid using the (==) operator (which is used in
 -- List.member). It might be a non problem, but it's pretty easy to do this.
 
@@ -975,14 +924,14 @@ isFalseCond cond =
 all : List (Condition attributes) -> Condition attributes
 all conds =
     if List.isEmpty conds then
-        BooleanCond True
+        CBoolean True
     else if List.any isFalseCond conds then
-        BooleanCond False
+        CBoolean False
     else if List.all isTrueCond conds then
         -- NOTE: added this case to avoid and()
-        BooleanCond True
+        CBoolean True
     else
-        CombinationCond
+        CCombine
             { negated = False
             , operator = And
             , conditions = conds
@@ -994,14 +943,14 @@ all conds =
 any : List (Condition attributes) -> Condition attributes
 any conds =
     if List.isEmpty conds then
-        BooleanCond False
+        CBoolean False
     else if List.any isTrueCond conds then
-        BooleanCond True
+        CBoolean True
     else if List.all isFalseCond conds then
         -- NOTE: added this case to avoid or()
-        BooleanCond False
+        CBoolean False
     else
-        CombinationCond
+        CCombine
             { negated = False
             , operator = Or
             , conditions = conds
@@ -1010,21 +959,12 @@ any conds =
 
 true : Condition attributes
 true =
-    BooleanCond True
-
-
-
--- NOTE TODO: note to self in case that i forget. looking at http.extra gave me
--- an idea of implementing false in a different way. we can just send an http request
--- that always fails ('just send it to http://""' or something...) and then have an
--- expect that always returns []. this is probably a better solution than a limit 1
--- the only downside is that we are not actually hitting our postgrest endpoint...
--- this is probably okay tho -- we just need to document this behavior well!
+    CBoolean True
 
 
 false : Condition attributes
 false =
-    BooleanCond False
+    CBoolean False
 
 
 
@@ -1077,7 +1017,7 @@ updateOne (Schema name attributes) { change, where_, select } =
             Parameters
                 { schemaName = name
                 , attributeNames = attributeNames
-                , cardinality = One (conditionToParam attributes where_)
+                , cardinality = One (applyCondition attributes where_)
                 }
                 embeds
     in
@@ -1112,8 +1052,8 @@ updateMany (Schema name attributes) { change, where_, select, offset, limit, ord
 
         cardinality =
             Many
-                { order = ordersToMaybeParams attributes order
-                , where_ = conditionToParam attributes where_
+                { order = applyOrders attributes order
+                , where_ = applyCondition attributes where_
                 , limit = limit
                 , offset = offset
                 }
@@ -1155,7 +1095,7 @@ createOne (Schema name attributes) { change, select } =
             Parameters
                 { schemaName = name
                 , attributeNames = attributeNames
-                , cardinality = One Nothing
+                , cardinality = One (Err True)
                 }
                 embeds
     in
@@ -1193,8 +1133,8 @@ createMany (Schema name attributes) { change, select, where_, limit, offset, ord
 
         cardinality =
             Many
-                { order = ordersToMaybeParams attributes order
-                , where_ = conditionToParam attributes where_
+                { order = applyOrders attributes order
+                , where_ = applyCondition attributes where_
                 , limit = limit
                 , offset = offset
                 }
@@ -1233,7 +1173,7 @@ deleteOne (Schema name attributes) { where_, select } =
             Parameters
                 { schemaName = name
                 , attributeNames = attributeNames
-                , cardinality = One (conditionToParam attributes where_)
+                , cardinality = One (applyCondition attributes where_)
                 }
                 embeds
     in
@@ -1263,8 +1203,8 @@ deleteMany (Schema name attributes) { where_, select, limit, offset, order } =
 
         cardinality =
             Many
-                { order = ordersToMaybeParams attributes order
-                , where_ = conditionToParam attributes where_
+                { order = applyOrders attributes order
+                , where_ = applyCondition attributes where_
                 , limit = limit
                 , offset = offset
                 }
@@ -1305,7 +1245,7 @@ readOne from { select, where_ } =
             Parameters
                 { schemaName = schemaName
                 , attributeNames = attributeNames
-                , cardinality = One (conditionToParam attributes where_)
+                , cardinality = One (applyCondition attributes where_)
                 }
                 embeds
     in
@@ -1339,8 +1279,8 @@ readMany from { select, where_, offset, limit, order } =
 
         cardinality =
             Many
-                { order = ordersToMaybeParams attributes order
-                , where_ = conditionToParam attributes where_
+                { order = applyOrders attributes order
+                , where_ = applyCondition attributes where_
                 , limit = limit
                 , offset = offset
                 }
@@ -1381,8 +1321,8 @@ readFirst from { select, where_, order } =
 
         cardinality =
             Many
-                { order = ordersToMaybeParams attributes order
-                , where_ = conditionToParam attributes where_
+                { order = applyOrders attributes order
+                , where_ = applyCondition attributes where_
                 , limit = Just 1
                 , offset = Nothing
                 }
@@ -1439,8 +1379,8 @@ readPage from { select, where_, size, page, order } =
 
         cardinality =
             Many
-                { order = ordersToMaybeParams attributes (firstOrder :: restOrder)
-                , where_ = conditionToParam attributes where_
+                { order = applyOrders attributes (firstOrder :: restOrder)
+                , where_ = applyCondition attributes where_
                 , limit = Just size
                 , offset = Just ((page - 1) * size)
                 }
@@ -1507,7 +1447,7 @@ embedOne getRelationship (Schema schemaName attributes2) (Selection getSelection
                     Parameters
                         { schemaName = schemaName
                         , attributeNames = attributeNames
-                        , cardinality = One Nothing
+                        , cardinality = One (Err True)
                         }
                         embeds
             in
@@ -1558,8 +1498,8 @@ embedMany getRelationship (Schema schemaName attributes2) { select, where_, orde
 
                 cardinality =
                     Many
-                        { order = ordersToMaybeParams attributes2 order
-                        , where_ = conditionToParam attributes2 where_
+                        { order = applyOrders attributes2 order
+                        , where_ = applyCondition attributes2 where_
                         , limit = limit
                         , offset = offset
                         }
@@ -1574,6 +1514,8 @@ embedMany getRelationship (Schema schemaName attributes2) { select, where_, orde
             in
                 { attributeNames = []
                 , embeds = [ ( fkOrThroughName, parameters ) ]
+
+                -- TODO: do we need to account for fkOrThroughName here?
                 , decoder = Decode.field schemaName (Decode.list decoder)
                 }
 
@@ -1821,26 +1763,26 @@ parametersToHeaders (Parameters { cardinality, attributeNames } embeds) =
 parametersToUrl : String -> Parameters -> String
 parametersToUrl prePath ((Parameters { cardinality, schemaName, attributeNames } embeds) as parameters) =
     let
-        selectQueryParam =
-            toSelectQueryParam parameters
+        selectQueryParameter =
+            toSelectQueryParameter parameters
 
-        cardinalityQueryParams =
-            toCardinalityQueryParams ( [], cardinality )
+        cardinalityQueryParameters =
+            toCardinalityQueryParameters ( [], cardinality )
 
-        topLevelQueryParams =
-            selectQueryParam :: cardinalityQueryParams
+        topLevelQueryParameters =
+            selectQueryParameter :: cardinalityQueryParameters
 
-        embedLevelQueryParams =
-            embedsToQueryParams embeds
+        embedLevelQueryParameters =
+            embedsToQueryParameters embeds
 
-        allQueryParams =
-            List.filterMap identity (topLevelQueryParams ++ embedLevelQueryParams)
+        allQueryParameters =
+            List.filterMap identity (topLevelQueryParameters ++ embedLevelQueryParameters)
     in
-        Url.crossOrigin prePath [ schemaName ] allQueryParams
+        Url.crossOrigin prePath [ schemaName ] allQueryParameters
 
 
-toSelectQueryParam : Parameters -> Maybe Url.QueryParameter
-toSelectQueryParam (Parameters { attributeNames } embeds) =
+toSelectQueryParameter : Parameters -> Maybe Url.QueryParameter
+toSelectQueryParameter (Parameters { attributeNames } embeds) =
     case ( attributeNames, embeds ) of
         ( [], [] ) ->
             Nothing
@@ -1850,11 +1792,11 @@ toSelectQueryParam (Parameters { attributeNames } embeds) =
                 embedSelectStrings =
                     List.map embedToSelectString embeds
 
-                selectStrings =
+                allSelectStrings =
                     attributeNames ++ embedSelectStrings
 
                 selectionString =
-                    String.join "," selectStrings
+                    String.join "," allSelectStrings
             in
                 Just <| Url.string "select" selectionString
 
@@ -1887,18 +1829,18 @@ embedToSelectString ( disambiguateName, Parameters { schemaName, attributeNames,
             ]
 
 
-toCardinalityQueryParams : ( List String, Cardinality ) -> List (Maybe Url.QueryParameter)
-toCardinalityQueryParams ( embedPath, cardinality ) =
+toCardinalityQueryParameters : ( List String, Cardinality ) -> List (Maybe Url.QueryParameter)
+toCardinalityQueryParameters ( embedPath, cardinality ) =
     case cardinality of
         Many { where_, order, limit, offset } ->
-            [ Maybe.map (orderParamToQueryParam embedPath) order
-            , Maybe.map (offsetParamToQueryParam embedPath) offset
-            , Maybe.map (conditionParamToQueryParam embedPath) where_
-            , Maybe.map (limitParamToQueryParam embedPath) limit
+            [ Maybe.map (ordersToQueryParameter embedPath) order
+            , Maybe.map (offsetToQueryParameter embedPath) offset
+            , Maybe.map (conditionToQueryParameter embedPath) (Result.toMaybe where_)
+            , Maybe.map (limitToQueryParameter embedPath) limit
             ]
 
         One where_ ->
-            [ Maybe.map (conditionParamToQueryParam embedPath) where_ ]
+            [ Maybe.map (conditionToQueryParameter embedPath) (Result.toMaybe where_) ]
 
 
 type alias EmbedState =
@@ -1907,8 +1849,8 @@ type alias EmbedState =
     }
 
 
-embedsToQueryParams : List Embed -> List (Maybe Url.QueryParameter)
-embedsToQueryParams embeds =
+embedsToQueryParameters : List Embed -> List (Maybe Url.QueryParameter)
+embedsToQueryParameters embeds =
     let
         empty =
             { embedPath = []
@@ -1920,7 +1862,7 @@ embedsToQueryParams embeds =
     in
         embedDict
             |> Dict.toList
-            |> List.map toCardinalityQueryParams
+            |> List.map toCardinalityQueryParameters
             |> List.concat
 
 
