@@ -766,10 +766,10 @@ bool name =
         , urlEncoder =
             \b ->
                 if b then
-                    "True"
+                    "true"
 
                 else
-                    "False"
+                    "false"
         }
 
 
@@ -882,9 +882,34 @@ lt =
 
 {-| Is comparison
 -}
-is : a -> (attributes -> Attribute a) -> Condition attributes
-is =
-    condHelper Is
+is : Maybe Bool -> (attributes -> Attribute a) -> Condition attributes
+is value getAttribute =
+    let
+        getKeyValue attributes =
+            let
+                (Attribute { name }) =
+                    getAttribute attributes
+
+                valueString =
+                    case value of
+                        Nothing ->
+                            "null"
+
+                        Just True ->
+                            "true"
+
+                        Just False ->
+                            "false"
+            in
+            { key = name
+            , value = valueString
+            }
+    in
+    COperator
+        { negated = False
+        , operator = Is
+        , getKeyValue = getKeyValue
+        }
 
 
 {-| Negate a Condition
