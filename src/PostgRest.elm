@@ -1493,8 +1493,7 @@ embedAll :
     -> Selection attributes2 a
     -> Selection attributes1 (List a)
 embedAll getRelationship embeddedSchema selection =
-    embedMany getRelationship
-        embeddedSchema
+    embedMany getRelationship embeddedSchema <|
         { select = selection
         , where_ = true
         , order = []
