@@ -75,7 +75,7 @@ type PokemonSchema
 
 
 pokemonSchema :
-    Schema x
+    Schema PokemonSchema
         { id : Attribute Int
         , name : Attribute String
         , image : Attribute String
