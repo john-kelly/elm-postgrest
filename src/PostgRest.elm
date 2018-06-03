@@ -1880,14 +1880,14 @@ cardinalityToQueryParameters ( embedPath, cardinality ) =
 
 embedsToQueryParameters : List Embed -> List (Maybe QueryParameter)
 embedsToQueryParameters embeds =
-    embedToDict embeds
+    embedsToDict embeds
         |> Dict.toList
         |> List.map cardinalityToQueryParameters
         |> List.concat
 
 
-embedToDict : List Embed -> Dict (List String) Cardinality
-embedToDict embeds =
+embedsToDict : List Embed -> Dict (List String) Cardinality
+embedsToDict embeds =
     let
         empty =
             { embedPath = []
