@@ -1876,14 +1876,16 @@ toCardinalityQueryParameters ( embedPath, cardinality ) =
             [ Maybe.map (conditionToQueryParameter embedPath) (Result.toMaybe where_) ]
 
 
-type alias EmbedState =
-    { embedPath : List String
-    , embedDict : Dict (List String) Cardinality
-    }
-
-
 embedsToQueryParameters : List Embed -> List (Maybe QueryParameter)
 embedsToQueryParameters embeds =
+    embedToDict embeds
+        |> Dict.toList
+        |> List.map toCardinalityQueryParameters
+        |> List.concat
+
+
+embedToDict : List Embed -> Dict (List String) Cardinality
+embedToDict embeds =
     let
         empty =
             { embedPath = []
@@ -1894,9 +1896,12 @@ embedsToQueryParameters embeds =
             List.foldl embedToDictHelper empty embeds
     in
     embedDict
-        |> Dict.toList
-        |> List.map toCardinalityQueryParameters
-        |> List.concat
+
+
+type alias EmbedState =
+    { embedPath : List String
+    , embedDict : Dict (List String) Cardinality
+    }
 
 
 embedToDictHelper : Embed -> EmbedState -> EmbedState
