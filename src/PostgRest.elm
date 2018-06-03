@@ -1797,10 +1797,10 @@ parametersToUrl : String -> Parameters -> String
 parametersToUrl prePath ((Parameters { cardinality, schemaName, attributeNames } embeds) as parameters) =
     let
         selectQueryParameter =
-            toSelectQueryParameter parameters
+            parametersToSelectQueryParameter parameters
 
         cardinalityQueryParameters =
-            toCardinalityQueryParameters ( [], cardinality )
+            cardinalityToQueryParameters ( [], cardinality )
 
         topLevelQueryParameters =
             selectQueryParameter :: cardinalityQueryParameters
@@ -1814,24 +1814,26 @@ parametersToUrl prePath ((Parameters { cardinality, schemaName, attributeNames }
     Builder.crossOrigin prePath [ schemaName ] allQueryParameters
 
 
-toSelectQueryParameter : Parameters -> Maybe QueryParameter
-toSelectQueryParameter (Parameters { attributeNames } embeds) =
-    case ( attributeNames, embeds ) of
-        ( [], [] ) ->
+parametersToSelectQueryParameter : Parameters -> Maybe QueryParameter
+parametersToSelectQueryParameter parameters =
+    case parametersToSelectStrings parameters of
+        [] ->
             Nothing
 
-        ( _, _ ) ->
-            let
-                embedSelectStrings =
-                    List.map embedToSelectString embeds
+        selectStrings ->
+            Just <| Builder.string "select" (String.join "," selectStrings)
 
-                allSelectStrings =
-                    attributeNames ++ embedSelectStrings
 
-                selectionString =
-                    String.join "," allSelectStrings
-            in
-            Just <| Builder.string "select" selectionString
+parametersToSelectStrings : Parameters -> List String
+parametersToSelectStrings (Parameters { attributeNames } embeds) =
+    let
+        embedSelectStrings =
+            List.map embedToSelectString embeds
+
+        allSelectStrings =
+            attributeNames ++ embedSelectStrings
+    in
+    allSelectStrings
 
 
 embedToSelectString : Embed -> String
@@ -1862,8 +1864,8 @@ embedToSelectString ( disambiguateName, Parameters { schemaName, attributeNames,
         ]
 
 
-toCardinalityQueryParameters : ( List String, Cardinality ) -> List (Maybe QueryParameter)
-toCardinalityQueryParameters ( embedPath, cardinality ) =
+cardinalityToQueryParameters : ( List String, Cardinality ) -> List (Maybe QueryParameter)
+cardinalityToQueryParameters ( embedPath, cardinality ) =
     case cardinality of
         Many options ->
             [ Maybe.map (ordersToQueryParameter embedPath) options.order
@@ -1880,7 +1882,7 @@ embedsToQueryParameters : List Embed -> List (Maybe QueryParameter)
 embedsToQueryParameters embeds =
     embedToDict embeds
         |> Dict.toList
-        |> List.map toCardinalityQueryParameters
+        |> List.map cardinalityToQueryParameters
         |> List.concat
 
 
