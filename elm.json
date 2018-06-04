@@ -1,7 +1,7 @@
 {
     "type": "package",
     "name": "john-kelly/elm-postgrest",
-    "summary": "PostgREST Query Builder",
+    "summary": "PostgREST Request Builder",
     "license": "BSD-3-Clause",
     "version": "4.1.0",
     "exposed-modules": [
