@@ -1,13 +1,13 @@
-port module Main exposing (..)
+module Main exposing (..)
 
-import Tests
-import Test.Runner.Node exposing (run, TestProgram)
-import Json.Encode exposing (Value)
-
-
-main : TestProgram
-main =
-    run emit Tests.all
+import Expect
+import Test exposing (Test)
 
 
-port emit : ( String, Value ) -> Cmd msg
+suite : Test
+suite =
+    Test.describe "Tests"
+        [ Test.todo "write a test here"
+        , Test.test "failing test here" <| \_ -> Expect.fail "fail!"
+        , Test.test "passing test here" <| \_ -> Expect.pass
+        ]
