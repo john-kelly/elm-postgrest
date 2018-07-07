@@ -56,7 +56,6 @@ module PostgRest
         , nullable
         , order
         , readAll
-        , readFirst
         , readMany
         , readOne
         , readPage
@@ -69,14 +68,33 @@ module PostgRest
         , updateOne
         )
 
-{-| A request builder for PostgREST.
-
-I recommend looking at the [examples](https://github.com/john-kelly/elm-postgrest/blob/master/examples/) before diving into the API or source code.
+{-| Make PostgREST requests in Elm.
 
 
-# Defining your Schema
+### 1. Define the Schema
 
-A schema is the static representation of your data model. This includes both the Attributes and the Relationships. All requests are built _with_ the data model, so we're going to need to define the schema before we can do anything interesting.
+  - [Schema](#define-your-schema)
+  - [Attributes](#attributes)
+  - [Relationships](#relationships)
+
+
+### 2. Build the Request
+
+  - [Read](#read)
+  - [Selections](#selections)
+  - [Embedding](#embed-relationship-selections)
+  - [Conditions](#conditions)
+  - [Write](#write)
+
+
+### 3. Send the Request
+
+  - [HTTP](#toHttpRequest)
+
+
+# Define your Schema
+
+Before you can do anything interesting (ex. fetching resources), you must first define your schema. The schema is a description of the available resources for your (Postg)REST API. The schema answers questions like: "What resources are available to me?", "What attributes can I select?" and "What relationships can I embed?". Once defined, all requests are built *from* this schema. One cool benefit of this design choice is that if your schema correctly represents your REST API's data model, this package ensures that you are (for the most part!) incapable of constructing invalid requests.
 
 @docs Schema, schema
 
@@ -86,24 +104,33 @@ A schema is the static representation of your data model. This includes both the
 @docs Attribute, string, int, float, bool, nullable
 
 
-### Custom Attributes
+## Custom Attributes
 
 @docs attribute
 
 
 ## Relationships
 
+One of the big ideas in this package. How do we represent what are essentially mutually recursive types? Well, we separate the data from the schema! Databases have been able to represent this for years! (but they don't even necessarily get it right... b/c you have to do mutual relationships / fk's in stages w/ the DDL!)
+
 @docs Relationship, HasOne, hasOne, HasMany, hasMany, HasNullable, hasNullable
 
 
-# Building Requests
+# Build a Request
 
-PostgREST supports all of the CRUD (Create, Read, Update, Delete) operations that we know and love! In our quest to understand, we'll start with the reads!
+PostgREST supports all of the CRUD (Create, Read, Update, Delete) operations that you know and love! In our quest to understand, we'll start with the reads!
 
-@docs Request, readAll, readFirst, readOne, readMany, readPage
+@docs Request
+
+
+## Read
+
+@docs readAll, readOne, readMany, readPage
 
 
 ## Selections
+
+API is similar to that of JSON Decoders! One big idea is that we're able to build up *both* how to decode (JSON Decoder) and what to select (field mask/selection set) (META: i think this is important to note to give people some context!)
 
 @docs Selection
 
@@ -113,14 +140,14 @@ PostgREST supports all of the CRUD (Create, Read, Update, Delete) operations tha
 @docs field, succeed
 
 
+### Embed Relationship Selections
+
+@docs embedAll, embedOne, embedNullable, embedMany
+
+
 ### Mapping Selections
 
 @docs map, map2, map3, map4, map5, map6, map7, map8
-
-
-### Embedding Relationship Selections
-
-@docs embedOne, embedAll, embedNullable, embedMany
 
 
 ## Conditions
@@ -138,7 +165,7 @@ PostgREST supports all of the CRUD (Create, Read, Update, Delete) operations tha
 @docs true, false
 
 
-### Combining Conditions
+### Combine Conditions
 
 @docs not, all, any
 
@@ -153,25 +180,14 @@ PostgREST supports all of the CRUD (Create, Read, Update, Delete) operations tha
 @docs Direction, Nulls, order
 
 
-# Building Write Requests
+## Write
 
-In addition to reading, we can perform the basic CRUD write operations.
-
-
-## Deleting
-
-We'll start with deletions. The api for deleting is pretty similar to reading.
-
-@docs deleteOne, deleteMany
+In addition to reading, we can perform the CRUD write operations.
 
 
-## Creating and Updating
+### Create, Update, Delete
 
-@docs createOne, createMany, updateOne, updateMany
-
-
-### Describing Change!
-
+@docs createOne, createMany, updateOne, updateMany, deleteOne, deleteMany
 @docs Changeset, change, batch
 
 
@@ -188,7 +204,8 @@ import Json.Encode as Encode
 import Url.Builder as Builder exposing (QueryParameter)
 
 
-{-| -}
+{-| Each resource will have its own Schema
+-}
 type Schema id attributes
     = Schema String attributes
 
@@ -199,7 +216,7 @@ type Attribute a
         { name : String
         , decoder : Decode.Decoder a
         , encoder : a -> Encode.Value
-        , urlEncoder : a -> String
+        , toString : a -> String
         }
 
 
@@ -289,7 +306,8 @@ type Selection attributes a
         )
 
 
-{-| -}
+{-| In order to build our create/update requests, we need a way to *describe* the data changes we want. That's where the Changeset comes in.
+-}
 type Changeset attributes
     = Changeset (attributes -> List ( String, Encode.Value ))
 
@@ -436,26 +454,43 @@ type alias Orders =
     ( Order_, List Order_ )
 
 
-{-| -}
+{-|
+
+    schoolSchema :
+        Schema x
+            { id : Attribute Int
+            , name : Attribute String
+            , state : Attribute String
+            }
+    schoolSchema =
+        schema "schools"
+            { id = int "id"
+            , name = string "name"
+            , state = string "state"
+            }
+
+META: should backref this b/c we didn't define it in the intro BUT we used it!
+
+-}
 schema : String -> attributes -> Schema id attributes
-schema name s =
-    Schema name s
+schema name attrs =
+    Schema name attrs
 
 
 {-| -}
 attribute :
     { decoder : Decode.Decoder a
     , encoder : a -> Encode.Value
-    , urlEncoder : a -> String
+    , toString : a -> String
     }
     -> String
     -> Attribute a
-attribute { decoder, encoder, urlEncoder } name =
+attribute { decoder, encoder, toString } name =
     Attribute
         { name = name
         , decoder = decoder
         , encoder = encoder
-        , urlEncoder = urlEncoder
+        , toString = toString
         }
 
 
@@ -466,7 +501,7 @@ int name =
         { name = name
         , decoder = Decode.int
         , encoder = Encode.int
-        , urlEncoder = String.fromInt
+        , toString = String.fromInt
         }
 
 
@@ -477,7 +512,7 @@ string name =
         { name = name
         , decoder = Decode.string
         , encoder = Encode.string
-        , urlEncoder = identity
+        , toString = identity
         }
 
 
@@ -488,7 +523,7 @@ float name =
         { name = name
         , decoder = Decode.float
         , encoder = Encode.float
-        , urlEncoder = String.fromFloat
+        , toString = String.fromFloat
         }
 
 
@@ -1150,8 +1185,8 @@ createMany :
     Schema id attributes
     ->
         { change : List (Changeset attributes)
-        , where_ : Condition attributes
         , select : Selection attributes a
+        , where_ : Condition attributes
         , order : List (Order attributes)
         , limit : Maybe Int
         , offset : Maybe Int
@@ -1198,8 +1233,8 @@ createMany (Schema name attributes) options =
 readOne :
     Schema id attributes
     ->
-        { where_ : Condition attributes
-        , select : Selection attributes a
+        { select : Selection attributes a
+        , where_ : Condition attributes
         }
     -> Request a
 readOne (Schema schemaName attributes) { select, where_ } =
@@ -1381,8 +1416,8 @@ updateOne :
     Schema id attributes
     ->
         { change : Changeset attributes
-        , where_ : Condition attributes
         , select : Selection attributes a
+        , where_ : Condition attributes
         }
     -> Request a
 updateOne (Schema name attributes) options =
@@ -1416,8 +1451,8 @@ updateMany :
     Schema id attributes
     ->
         { change : Changeset attributes
-        , where_ : Condition attributes
         , select : Selection attributes a
+        , where_ : Condition attributes
         , order : List (Order attributes)
         , limit : Maybe Int
         , offset : Maybe Int
@@ -1461,8 +1496,8 @@ updateMany (Schema name attributes) options =
 deleteOne :
     Schema id attributes
     ->
-        { where_ : Condition attributes
-        , select : Selection attributes a
+        { select : Selection attributes a
+        , where_ : Condition attributes
         }
     -> Request a
 deleteOne (Schema name attributes) { where_, select } =
@@ -1491,8 +1526,8 @@ deleteOne (Schema name attributes) { where_, select } =
 deleteMany :
     Schema id attributes
     ->
-        { where_ : Condition attributes
-        , select : Selection attributes a
+        { select : Selection attributes a
+        , where_ : Condition attributes
         , order : List (Order attributes)
         , limit : Maybe Int
         , offset : Maybe Int
