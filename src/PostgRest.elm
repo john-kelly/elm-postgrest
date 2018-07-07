@@ -1301,45 +1301,6 @@ readMany (Schema schemaName attributes) options =
 
 
 {-| -}
-readFirst :
-    Schema id attributes
-    ->
-        { select : Selection attributes a
-        , where_ : Condition attributes
-        , order : List (Order attributes)
-        }
-    -> Request (Maybe a)
-readFirst (Schema schemaName attributes) options =
-    let
-        (Selection getSelection) =
-            options.select
-
-        { attributeNames, embeds, decoder } =
-            getSelection attributes
-
-        cardinality =
-            Many
-                { order = applyOrders attributes options.order
-                , where_ = applyCondition attributes options.where_
-                , limit = Just 1
-                , offset = Nothing
-                }
-
-        parameters =
-            Parameters
-                { schemaName = schemaName
-                , attributeNames = attributeNames
-                , cardinality = cardinality
-                }
-                embeds
-    in
-    Read
-        { parameters = parameters
-        , decoder = Decode.map List.head (Decode.list decoder)
-        }
-
-
-{-| -}
 readAll : Schema id attributes -> Selection attributes a -> Request (List a)
 readAll s select =
     readMany s
