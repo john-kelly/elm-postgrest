@@ -52,7 +52,7 @@ schoolsRequest =
     Rest.readMany schoolSchema
         { select = schoolSelection
         , where_ = Rest.eq "CA" .state
-        , order = Rest.asc .name
+        , order = [ Rest.asc .name ]
         , limit = Nothing
         , offset = Nothing
         }
