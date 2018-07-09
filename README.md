@@ -69,7 +69,7 @@ As demonstrated above, this package leads to a more pleasant experience for inte
 > You may have noticed that the above example does not provide a definition for `schoolSchema`. Dig into the [docs](https://packages.elm-lang.org/john-kelly/elm-postgrest) to learn more!
 
 ## Additional Resources
-- [Official Documentation] (https://packages.elm-lang.org/john-kelly/elm-postgrest)
-- [Simple Examples: elm-postgrest/examples] (https://github.com/john-kelly/elm-postgrest/blob/master/src/examples)
-- [Complex Example: elm-postgrest-spa-example] (https://github.com/john-kelly/elm-postgrest-spa-example)
-- [Blog Posts] (https://foldp.com)
+- [Official Documentation](https://packages.elm-lang.org/john-kelly/elm-postgrest)
+- [Simple Examples: elm-postgrest/examples](https://github.com/john-kelly/elm-postgrest/blob/master/src/examples)
+- [Complex Example: elm-postgrest-spa-example](https://github.com/john-kelly/elm-postgrest-spa-example)
+- [Blog Posts](https://foldp.com)
