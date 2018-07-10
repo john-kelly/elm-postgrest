@@ -80,11 +80,11 @@ module PostgRest
 
 ### 2. Build the Request
 
-  - [Read](#read)
-  - [Selections](#selections)
-  - [Embedding](#embed-relationship-selections)
-  - [Conditions](#conditions)
-  - [Write](#write)
+  - [Read Requests](#build-a-request)
+  - [Selecting](#selecting)
+  - [Filtering](#filtering)
+  - [Ordering](#ordering)
+  - [Write Requests](#write-requests)
 
 
 ### 3. Send the Request
@@ -104,7 +104,7 @@ Before you can do anything interesting (ex. fetching resources), you must first 
 @docs Attribute, string, int, float, bool, nullable
 
 
-## Custom Attributes
+### Custom Attributes
 
 @docs attribute
 
@@ -123,12 +123,12 @@ PostgREST supports all of the CRUD (Create, Read, Update, Delete) operations tha
 @docs Request
 
 
-## Read
+## Read Requests
 
 @docs readAll, readOne, readMany, readPage
 
 
-## Selections
+## Selecting
 
 API is similar to that of JSON Decoders! One big idea is that we're able to build up *both* how to decode (JSON Decoder) and what to select (field mask/selection set) (META: i think this is important to note to give people some context!)
 
@@ -140,17 +140,17 @@ API is similar to that of JSON Decoders! One big idea is that we're able to buil
 @docs field, succeed
 
 
-### Embed Relationship Selections
-
-@docs embedAll, embedOne, embedNullable, embedMany
-
-
 ### Mapping Selections
 
 @docs map, map2, map3, map4, map5, map6, map7, map8
 
 
-## Conditions
+### Embed Selections
+
+@docs embedAll, embedOne, embedNullable, embedMany
+
+
+## Filtering
 
 @docs Condition
 
@@ -165,7 +165,7 @@ API is similar to that of JSON Decoders! One big idea is that we're able to buil
 @docs true, false
 
 
-### Combine Conditions
+### Combining Conditions
 
 @docs not, all, any
 
@@ -180,7 +180,7 @@ API is similar to that of JSON Decoders! One big idea is that we're able to buil
 @docs Direction, Nulls, order
 
 
-## Write
+## Write Requests
 
 In addition to reading, we can perform the CRUD write operations.
 
@@ -204,7 +204,14 @@ import Json.Encode as Encode
 import Url.Builder as Builder exposing (QueryParameter)
 
 
-{-| Each resource will have its own Schema
+{-| You'll define a `Schema` for each available resource of your PostgREST server. There are 2 type parameters to the Schema data type:
+
+1. `id`: phantom type tag used to prevent invalid requests when performing embedding
+> The `id` type parameter is optional, however, **strongly encouraged**. If not specified, the Elm compiler is unable to let you know when you're trying to make an invalid embed.
+
+2. `attributes`: record of the available `Attribute` to select and `Relationship` to embed
+> Technically speaking, the type of `attributes` can be **anything**, however, in practice the type will always be a record of `Attribute` and `Relationship`.
+
 -}
 type Schema id attributes
     = Schema String attributes
@@ -454,23 +461,27 @@ type alias Orders =
     ( Order_, List Order_ )
 
 
-{-|
+{-| Let's take a look at the definition of `Schema.school` originally referenced in the example found in the README of this package.
 
-    schoolSchema :
-        Schema x
+    -- Schema.elm
+
+    type School
+        = School School
+
+
+    school :
+        Schema School
             { id : Attribute Int
             , name : Attribute String
             , state : Attribute String
             }
-    schoolSchema =
+    school =
         schema "schools"
             { id = int "id"
             , name = string "name"
             , state = string "state"
+            , -- TODO: add Relationship here that we can backref later
             }
-
-META: should backref this b/c we didn't define it in the intro BUT we used it!
-
 -}
 schema : String -> attributes -> Schema id attributes
 schema name attrs =
@@ -534,7 +545,7 @@ bool name =
         { name = name
         , decoder = Decode.bool
         , encoder = Encode.bool
-        , urlEncoder =
+        , toString =
             \b ->
                 if b then
                     "true"
@@ -546,17 +557,17 @@ bool name =
 
 {-| -}
 nullable : Attribute a -> Attribute (Maybe a)
-nullable (Attribute { name, decoder, encoder, urlEncoder }) =
+nullable (Attribute { name, decoder, encoder, toString }) =
     let
-        newUrlEncoder maybeVal =
+        newToString maybeVal =
             case maybeVal of
                 Just val ->
-                    urlEncoder val
+                    toString val
 
                 Nothing ->
                     "null"
 
-        newJsonEncoder maybeVal =
+        newEncoder maybeVal =
             case maybeVal of
                 Just val ->
                     encoder val
@@ -567,8 +578,8 @@ nullable (Attribute { name, decoder, encoder, urlEncoder }) =
     Attribute
         { name = name
         , decoder = Decode.nullable decoder
-        , encoder = newJsonEncoder
-        , urlEncoder = newUrlEncoder
+        , encoder = newEncoder
+        , toString = newToString
         }
 
 
@@ -981,11 +992,11 @@ condHelper operator value getAttribute =
     let
         getKeyValue attributes =
             let
-                (Attribute { urlEncoder, name }) =
+                (Attribute { toString, name }) =
                     getAttribute attributes
 
                 valueString =
-                    urlEncoder value
+                    toString value
             in
             { key = name
             , value = valueString
