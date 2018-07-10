@@ -24,12 +24,12 @@ type alias School =
     , name : String
     }
 
-schoolsRequest : Http.Request (List School)
-schoolsRequest =
-    Http.get "https://api.com/schools?select=id,name&state=eq.CA&order=asc.name" (Decode.list schoolDecoder)
+request : Http.Request (List School)
+request =
+    Http.get "https://api.com/schools?select=id,name&state=eq.CA&order=asc.name" (Decode.list decoder)
 
-schoolDecoder : Json.Decoder School
-schoolDecoder =
+decoder : Json.Decoder School
+decoder =
     map2
         (Json.field "id")
         (Json.field "name")
@@ -41,24 +41,25 @@ Now, let's take a look at how you'd build the request with this package:
 
 ```elm
 import PostgRest as Rest
+import Schema
 
 type alias School =
     { id : Int
     , name : String
     }
 
-schoolsRequest : Rest.Request (List School)
-schoolsRequest =
-    Rest.readMany schoolSchema
-        { select = schoolSelection
+request : Rest.Request (List School)
+request =
+    Rest.readMany Schema.school
+        { select = selection
         , where_ = Rest.eq "CA" .state
         , order = [ Rest.asc .name ]
         , limit = Nothing
         , offset = Nothing
         }
 
-schoolSelection : Rest.Selection { a | id : Attribute Int, name : Attribute String } School
-schoolSelection =
+selection : Rest.Selection { a | id : Attribute Int, name : Attribute String } School
+selection =
     Rest.map2
         (Rest.field .id)
         (Rest.field .name)
@@ -66,7 +67,7 @@ schoolSelection =
 
 As demonstrated above, this package leads to a more pleasant experience for interacting with PostgREST in Elm. The request code 1.) contains only the essential details of the data request and 2.) is no longer prone to invalid construction (because the strings are gone). Pretty cool.
 
-> You may have noticed that the above example does not provide a definition for `schoolSchema`. Dig into the [docs](https://packages.elm-lang.org/john-kelly/elm-postgrest) to learn more!
+> You may have noticed that the above example does not provide a definition for `Schema.school`. Dig into the [docs](https://packages.elm-lang.org/john-kelly/elm-postgrest) to learn more!
 
 ## Additional Resources
 - [Official Documentation](https://packages.elm-lang.org/john-kelly/elm-postgrest)
