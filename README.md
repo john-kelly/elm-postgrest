@@ -67,10 +67,10 @@ selection =
 
 As demonstrated above, this package leads to a more pleasant experience for interacting with PostgREST in Elm. The request code 1.) contains only the essential details of the data request and 2.) is no longer prone to invalid construction (because the strings are gone). Pretty cool.
 
-> You may have noticed that the above example does not provide a definition for `Schema.school`. Dig into the [docs](https://packages.elm-lang.org/john-kelly/elm-postgrest) to learn more!
+> You may have noticed that the above example does not provide a definition for `Schema.school`. Dig into the [docs](http://package.elm-lang.org/packages/john-kelly/elm-postgrest/latest) to learn more!
 
 ## Additional Resources
-- [Official Documentation](https://packages.elm-lang.org/john-kelly/elm-postgrest)
-- [Simple Examples: elm-postgrest/examples](https://github.com/john-kelly/elm-postgrest/blob/master/src/examples)
+- [Official Documentation](http://package.elm-lang.org/packages/john-kelly/elm-postgrest/latest)
+- [Simple Examples: elm-postgrest/examples](https://github.com/john-kelly/elm-postgrest/tree/master/examples)
 - [Complex Example: elm-postgrest-spa-example](https://github.com/john-kelly/elm-postgrest-spa-example)
 - [Blog Posts](https://foldp.com)
