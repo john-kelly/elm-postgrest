@@ -4,7 +4,7 @@ import Browser
 import Html exposing (Html, div, img, text)
 import Html.Attributes exposing (src, style)
 import Http
-import PostgRest as PG
+import PostgRest as Rest
     exposing
         ( Attribute
         , Request
@@ -15,8 +15,8 @@ import PostgRest as PG
 
 getPokemon : Cmd Msg
 getPokemon =
-    PG.readAll pokemonSchema pokemonSelection
-        |> PG.toHttpRequest
+    Rest.readAll pokemonSchema pokemonSelection
+        |> Rest.toHttpRequest
             { timeout = Nothing
             , token = Nothing
             , url = "http://localhost:3000"
@@ -40,10 +40,10 @@ pokemonSelection :
         }
         Pokemon
 pokemonSelection =
-    PG.map3 Pokemon
-        (PG.field .image)
-        (PG.field .name)
-        (PG.field .id)
+    Rest.map3 Pokemon
+        (Rest.field .image)
+        (Rest.field .name)
+        (Rest.field .id)
 
 
 pokemonSchema :
@@ -53,10 +53,10 @@ pokemonSchema :
         , image : Attribute String
         }
 pokemonSchema =
-    PG.schema "pokemons"
-        { id = PG.int "id"
-        , name = PG.string "name"
-        , image = PG.string "image"
+    Rest.schema "pokemons"
+        { id = Rest.int "id"
+        , name = Rest.string "name"
+        , image = Rest.string "image"
         }
 
 
@@ -100,10 +100,9 @@ page model =
 
 main : Program () Model Msg
 main =
-    Browser.fullscreen
+    Browser.document
         { init = \_ -> ( [], getPokemon )
         , view = page
         , update = update
-        , onNavigation = Nothing
         , subscriptions = \_ -> Sub.none
         }
