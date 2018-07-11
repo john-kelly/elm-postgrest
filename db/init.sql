@@ -27,13 +27,8 @@ begin;
 \ir authorization/roles.sql
 \ir authorization/privileges.sql
 
-insert into data.trainer values (1, 'Ash', 'https://i.imgur.com/x1Nno1O.png');
-insert into data.trainer values (2, 'Gary', 'https://i.imgur.com/wF5x6lQ.png');
-insert into data.pokemon values (1, 'Bulbasaur', 'https://i.imgur.com/p7Qv6bL.png');
-insert into data.pokemon values (4, 'Charmander', 'https://i.imgur.com/OB0OmM7.png');
-insert into data.pokemon values (7, 'Squirtle', 'https://i.imgur.com/k6Fpq6k.png');
-insert into data.capture values (1, 5, 1, 2);
-insert into data.capture values (2, 5, 7, 1);
+
+-- \copy data.school(UNITID, INSTNM, ADDR, CITY, STABBR, ZIP, CHFNM, CHFTITLE, GENTELE, WEBADDR, LONGITUD, LATITUDE) FROM '/Users/johnkelly/code/elm-postgrest/db/hd2015-2.csv' DELIMITER ',' CSV HEADER
 
 commit;
 \echo # ==========================================

@@ -1,79 +1,58 @@
 module BasicExample exposing (..)
 
 import Browser
-import Html exposing (Html, div, img)
+import Html exposing (Html, div, img, text)
 import Html.Attributes exposing (src)
 import Http
 import PostgRest as Rest
-    exposing
-        ( Attribute
-        , Request
-        , Schema
-        , Selection
-        )
+import Schema
 
 
-getPokemon : Cmd Msg
-getPokemon =
-    Rest.readAll pokemonSchema pokemonSelection
-        |> Rest.toHttpRequest
-            { timeout = Nothing
-            , token = Nothing
-            , url = "http://localhost:3000"
-            }
-        |> Http.send Fetch
+type alias School =
+    { id : String
+    , name : String
+    }
 
 
-pokemonSelection :
-    Selection
-        { attributes
-            | image : Attribute String
+request : Rest.Request (List School)
+request =
+    Rest.readMany Schema.school
+        { select = selection
+        , where_ = Rest.eq "CA" .state
+        , order = [ Rest.asc .name ]
+        , limit = Nothing
+        , offset = Nothing
         }
-        String
-pokemonSelection =
-    Rest.field .image
 
 
-pokemonSchema :
-    Schema x
-        { id : Attribute Int
-        , name : Attribute String
-        , image : Attribute String
-        }
-pokemonSchema =
-    Rest.schema "pokemons"
-        { id = Rest.int "id"
-        , name = Rest.string "name"
-        , image = Rest.string "image"
-        }
+selection : Rest.Selection { a | id : Rest.Attribute String, name : Rest.Attribute String } School
+selection =
+    Rest.map2 School
+        (Rest.field .id)
+        (Rest.field .name)
 
 
 type alias Model =
-    List String
+    List School
 
 
 type Msg
-    = Fetch (Result Http.Error (List String))
+    = Fetch (Result Http.Error (List School))
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        Fetch (Ok images) ->
-            ( images, Cmd.none )
+        Fetch (Ok schools) ->
+            ( schools, Cmd.none )
 
         _ ->
             ( model, Cmd.none )
 
 
-viewPokemon : String -> Html Msg
-viewPokemon url =
-    img [ src url ] []
-
-
 view : Model -> Html Msg
 view model =
-    div [] (List.map viewPokemon model)
+    div [] (List.map (\school -> div [] [ text school.id, text ": ", text school.name ]) model)
 
 
 page : Model -> { title : String, body : List (Html Msg) }
@@ -83,10 +62,15 @@ page model =
     }
 
 
+getSchools : Cmd Msg
+getSchools =
+    Http.send Fetch (Rest.toHttpRequest { timeout = Nothing, token = Nothing, url = "http://localhost:3000" } request)
+
+
 main : Program () Model Msg
 main =
     Browser.document
-        { init = \_ -> ( [], getPokemon )
+        { init = \_ -> ( [], getSchools )
         , view = page
         , update = update
         , subscriptions = \_ -> Sub.none

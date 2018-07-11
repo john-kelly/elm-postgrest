@@ -20,7 +20,7 @@ import Http
 import Json.Decode as Json
 
 type alias School =
-    { id : Int
+    { id : String
     , name : String
     }
 
@@ -30,7 +30,7 @@ request =
 
 decoder : Json.Decoder School
 decoder =
-    map2
+    map2 School
         (Json.field "id")
         (Json.field "name")
 ```
@@ -44,7 +44,7 @@ import PostgRest as Rest
 import Schema
 
 type alias School =
-    { id : Int
+    { id : String
     , name : String
     }
 
@@ -58,9 +58,9 @@ request =
         , offset = Nothing
         }
 
-selection : Rest.Selection { a | id : Attribute Int, name : Attribute String } School
+selection : Rest.Selection { a | id : Rest.Attribute String, name : Rest.Attribute String } School
 selection =
-    Rest.map2
+    Rest.map2 School
         (Rest.field .id)
         (Rest.field .name)
 ```

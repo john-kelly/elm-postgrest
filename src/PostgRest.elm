@@ -94,7 +94,7 @@ module PostgRest
 
 # Define your Schema
 
-Before you can do anything interesting (ex. fetching resources), you must first define your schema. The schema is a description of the available resources for your (Postg)REST API. The schema answers questions like: "What resources are available to me?", "What attributes can I select?" and "What relationships can I embed?". Once defined, all requests are built *from* this schema. One cool benefit of this design choice is that if your schema correctly represents your REST API's data model, this package ensures that you are (for the most part!) incapable of constructing invalid requests.
+Before you can do anything interesting (ex. fetching resources), you must first define your schema. The schema is a description of the available resources for your (Postg)REST API. The schema answers questions like: "What resources are available to me?", "What attributes can I select?" and "What relationships can I embed?". Once defined, all requests are built _from_ this schema. One cool benefit of this design choice is that if your schema correctly represents your REST API's data model, this package ensures that you are (for the most part!) incapable of constructing invalid requests.
 
 @docs Schema, schema
 
@@ -130,7 +130,7 @@ PostgREST supports all of the CRUD (Create, Read, Update, Delete) operations tha
 
 ## Selecting
 
-API is similar to that of JSON Decoders! One big idea is that we're able to build up *both* how to decode (JSON Decoder) and what to select (field mask/selection set) (META: i think this is important to note to give people some context!)
+API is similar to that of JSON Decoders! One big idea is that we're able to build up _both_ how to decode (JSON Decoder) and what to select (field mask/selection set) (META: i think this is important to note to give people some context!)
 
 @docs Selection
 
@@ -206,10 +206,12 @@ import Url.Builder as Builder exposing (QueryParameter)
 
 {-| You'll define a `Schema` for each available resource of your PostgREST server. There are 2 type parameters to the Schema data type:
 
-1. `id`: phantom type tag used to prevent invalid requests when performing embedding
+1.  `id`: phantom type tag used to prevent invalid requests when performing embedding
+
 > The `id` type parameter is optional, however, **strongly encouraged**. If not specified, the Elm compiler is unable to let you know when you're trying to make an invalid embed.
 
-2. `attributes`: record of the available `Attribute` to select and `Relationship` to embed
+1.  `attributes`: record of the available `Attribute` to select and `Relationship` to embed
+
 > Technically speaking, the type of `attributes` can be **anything**, however, in practice the type will always be a record of `Attribute` and `Relationship`.
 
 -}
@@ -313,7 +315,7 @@ type Selection attributes a
         )
 
 
-{-| In order to build our create/update requests, we need a way to *describe* the data changes we want. That's where the Changeset comes in.
+{-| In order to build our create/update requests, we need a way to _describe_ the data changes we want. That's where the Changeset comes in.
 -}
 type Changeset attributes
     = Changeset (attributes -> List ( String, Encode.Value ))
@@ -477,11 +479,12 @@ type alias Orders =
             }
     school =
         schema "schools"
-            { id = int "id"
-            , name = string "name"
-            , state = string "state"
+            { id = string "unitid"
+            , name = string "instnm"
+            , state = string "stabbr"
             , -- TODO: add Relationship here that we can backref later
             }
+
 -}
 schema : String -> attributes -> Schema id attributes
 schema name attrs =
