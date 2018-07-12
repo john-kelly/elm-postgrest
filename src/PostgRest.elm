@@ -101,6 +101,8 @@ Before you can do anything interesting (ex. fetching resources), you must first 
 
 ## Attributes
 
+A `Schema` is made up of `Attribute`s. An `Attribute` represents a single field of an exposed resource. In the context of PostgREST and PostgreSQL, an `Attribute` is, in a way, equivalent to a column.
+
 @docs Attribute, string, int, float, bool, nullable
 
 
