@@ -57,7 +57,7 @@ view model =
 
 page : Model -> { title : String, body : List (Html Msg) }
 page model =
-    { title = "Basic Example"
+    { title = "README Example"
     , body = [ view model ]
     }
 
