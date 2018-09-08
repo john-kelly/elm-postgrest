@@ -1,72 +1,24 @@
-module PostgRest
-    exposing
-        ( Attribute
-        , Changeset
-        , Condition
-        , Direction(..)
-        , HasMany
-        , HasNullable
-        , HasOne
-        , Nulls(..)
-        , Order
-        , Relationship
-        , Request
-        , Schema
-        , Selection
-        , all
-        , any
-        , asc
-        , attribute
-        , batch
-        , bool
-        , change
-        , createMany
-        , createOne
-        , deleteMany
-        , deleteOne
-        , desc
-        , embedAll
-        , embedMany
-        , embedNullable
-        , embedOne
-        , eq
-        , false
-        , field
-        , float
-        , gt
-        , gte
-        , hasMany
-        , hasNullable
-        , hasOne
-        , ilike
-        , int
-        , is
-        , like
-        , lt
-        , lte
-        , map
-        , map2
-        , map3
-        , map4
-        , map5
-        , map6
-        , map7
-        , map8
-        , not
-        , nullable
-        , order
-        , readAll
-        , readMany
-        , readOne
-        , readPage
-        , schema
-        , string
-        , succeed
-        , toHttpRequest
-        , true
-        , updateMany
-        , updateOne
-        )
+module PostgRest exposing
+    ( Schema, schema
+    , Attribute, string, int, float, bool, nullable
+    , attribute
+    , Relationship, HasOne, hasOne, HasMany, hasMany, HasNullable, hasNullable
+    , Request
+    , readAll, readOne, readMany, readPage
+    , Selection
+    , field, succeed
+    , map, map2, map3, map4, map5, map6, map7, map8
+    , embedAll, embedOne, embedNullable, embedMany
+    , Condition
+    , like, ilike, eq, gte, gt, lte, lt, is
+    , true, false
+    , not, all, any
+    , Order, asc, desc
+    , Direction(..), Nulls(..), order
+    , createOne, createMany, updateOne, updateMany, deleteOne, deleteMany
+    , Changeset, change, batch
+    , toHttpRequest
+    )
 
 {-| Make PostgREST requests in Elm.
 
@@ -850,7 +802,7 @@ embedNullable getRelationship (Schema schemaName attributes2) (Selection getSele
             in
             { attributeNames = []
             , embeds = [ ( fkName, parameters ) ]
-            , decoder = Decode.nullable (Decode.field fkName decoder)
+            , decoder = Decode.field fkName (Decode.nullable decoder)
             }
 
 

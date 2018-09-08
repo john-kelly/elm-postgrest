@@ -1,4 +1,4 @@
-module BasicExample exposing (..)
+module BasicExample exposing (main)
 
 import Browser
 import Html exposing (Html, div, img, text)

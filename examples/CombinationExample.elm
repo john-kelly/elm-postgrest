@@ -1,4 +1,4 @@
-module CombinationExample exposing (..)
+module CombinationExample exposing (main)
 
 import Browser
 import Html exposing (Html, div, img, text)

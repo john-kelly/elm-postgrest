@@ -1,4 +1,4 @@
-module RelationshipExample exposing (..)
+module RelationshipExample exposing (main)
 
 import Browser
 import Html exposing (Html, div, img, text)
