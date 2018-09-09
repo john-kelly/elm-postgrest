@@ -1,4 +1,4 @@
-module Schema exposing (school)
+module Schema exposing (School, school)
 
 import PostgRest exposing (Attribute, Schema, schema, string)
 

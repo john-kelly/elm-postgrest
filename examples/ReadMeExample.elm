@@ -1,8 +1,7 @@
-module BasicExample exposing (main)
+module ReadMeExample exposing (main)
 
 import Browser
-import Html exposing (Html, div, img, text)
-import Html.Attributes exposing (src)
+import Html exposing (Html, div, text)
 import Http
 import PostgRest as Rest
 import Schema
