@@ -35,7 +35,10 @@ decoder =
         (Json.field "name")
 ```
 
-As demonstrated above, in the standard approach, you must build an HTTP GET request to the url `https://api.com/schools?select=id,name&state=eq.CA&order=asc.name` (Transfer Protocol) and decode the JSON response to your desired data structure (Interchange Format). The request code 1.) contains inessential details of the PostgREST specification (ie. HTTP and JSON) and 2.) is prone to invalid construction (because of heavy string usage).
+As demonstrated above, in the standard approach, you must build an HTTP GET request to the url `https://api.com/schools?select=id,name&state=eq.CA&order=asc.name` (Transfer Protocol) and decode the JSON response to your desired data structure (Interchange Format). Without elm-postgrest, the request code:
+
+1.  contains inessential details of the PostgREST specification (ie. HTTP and JSON)
+2.  is prone to invalid construction (because of heavy string usage)
 
 Now, let's take a look at how you'd build the request **with this package**:
 
@@ -66,9 +69,14 @@ selection =
         (Rest.field .name)
 ```
 
-As demonstrated above, this package leads to a more pleasant experience for interacting with PostgREST in Elm. The request code 1.) contains only the essential details of the data request and 2.) is no longer prone to invalid construction (because the strings are gone). Pretty cool.
+As demonstrated above, this package leads to a more pleasant experience for interacting with PostgREST in Elm. With elm-postgrest, the request code:
 
-> You may have noticed that the above example does not provide a definition for `Schema.school`. Dig into the [docs](http://package.elm-lang.org/packages/john-kelly/elm-postgrest/latest/PostgRest) to learn more!
+1.  contains only the essential details of the data request
+2.  is no longer prone to invalid construction (because the strings are gone).
+
+Pretty cool.
+
+> As an aside, you may have noticed that the above example does not provide a definition for `Schema.school`. Dig into the [docs](http://package.elm-lang.org/packages/john-kelly/elm-postgrest/latest/PostgRest) to learn more!
 
 ## Additional Resources
 
