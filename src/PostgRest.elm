@@ -166,11 +166,11 @@ import Url.Builder as Builder exposing (QueryParameter)
 
   - `id`: type tag which uniquely identifies _this_ `Schema`
 
-    > The `id` type parameter is optional, however, **strongly encouraged**. If not specified, the Elm compiler is unable to let you know when you're trying to make an invalid embed. Additionally, the type of `id` can be _anything_, however in practice the type will always be an empty custom type which you define to uniquely identify _this_ `Schema`.
+> The `id` type parameter is optional, however, **strongly encouraged**. If not specified, the Elm compiler is unable to let you know when you're trying to make an invalid embed. Additionally, the type of `id` can be _anything_, however in practice the type will always be an empty custom type which you define to uniquely identify _this_ `Schema`.
 
   - `attributes`: record of the available `Attribute` to select and `Relationship` to embed
 
-    > Once again, technically speaking, the type of `attributes` can be _anything_, however in practice the type will always be a record of `Attribute` and `Relationship`.
+> Once again, technically speaking, the type of `attributes` can be _anything_, however in practice the type will always be a record of `Attribute` and `Relationship`.
 
 -}
 type Schema id attributes
@@ -196,11 +196,11 @@ type Attribute a
 
   - `cardinality`: type tag which represents the _kind_ of `Relationship` you're modeling
 
-    > The `cardinality` is automatically determinded by the functions which return a `Relationship` (ie. hasMany, hasOne, hasNullable), so don't worry about constructing values for this type!
+> The `cardinality` is automatically determinded by the functions which return a `Relationship` (ie. hasMany, hasOne, hasNullable), so don't worry about constructing values for this type!
 
   - `id`: type tag which uniquely identifies the _other_ `Schema` that this `Schema` is related to
 
-    > Just like the `id` of a `Schema`, the `id` of a `Relationship` is optional, however, **strongly encouraged**. If not specified, the Elm compiler is unable to let you know when you're trying to make an invalid embed.
+> Just like the `id` of a `Schema`, the `id` of a `Relationship` is optional, however, **strongly encouraged**. If not specified, the Elm compiler is unable to let you know when you're trying to make an invalid embed.
 
 -}
 type Relationship cardinality id
