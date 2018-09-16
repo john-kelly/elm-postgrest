@@ -53,7 +53,7 @@ Before you can do anything interesting (ex. fetching resources), you must first 
 
 ## Attributes
 
-A `Schema` is made up of `Attribute`s. An `Attribute` represents a single field of an exposed resource. In the context of PostgREST and PostgreSQL, an `Attribute` is, in a way, equivalent to a column.
+A `Schema` is made up of `Attribute`s. An `Attribute` represents a single field of an exposed resource.
 
 @docs Attribute, string, int, float, bool, nullable
 
@@ -65,7 +65,7 @@ A `Schema` is made up of `Attribute`s. An `Attribute` represents a single field 
 
 ## Relationships
 
-One of the big ideas in this package. How do we represent what are essentially mutually recursive types? Well, we separate the data from the schema! Databases have been able to represent this for years! (but they don't even necessarily get it right... b/c you have to do mutual relationships / fk's in stages w/ the DDL!)
+The way in which we model a `Relationship` is one of the big ideas of this package. How do we represent what are often mutually recursive types? Well, we separate the resource from the schema!
 
 @docs Relationship, HasOne, hasOne, HasMany, hasMany, HasNullable, hasNullable
 
@@ -84,7 +84,7 @@ PostgREST supports all of the CRUD (Create, Read, Update, Delete) operations tha
 
 ## Selecting
 
-API is similar to that of JSON Decoders! One big idea is that we're able to build up _both_ how to decode (JSON Decoder) and what to select (field mask/selection set) (META: i think this is important to note to give people some context!)
+Describe what fields and embeds you'd like to select. The API is pretty similar to JSON Decoders.
 
 @docs Selection
 
@@ -106,6 +106,8 @@ API is similar to that of JSON Decoders! One big idea is that we're able to buil
 
 ## Filtering
 
+Describe how you'd like your resources filtered.
+
 @docs Condition
 
 
@@ -125,6 +127,8 @@ API is similar to that of JSON Decoders! One big idea is that we're able to buil
 
 
 ## Ordering
+
+Describe how you'd like your resources ordered.
 
 @docs Order, asc, desc
 
@@ -158,15 +162,15 @@ import Json.Encode as Encode
 import Url.Builder as Builder exposing (QueryParameter)
 
 
-{-| You'll define a `Schema` for each available resource of your PostgREST server. There are 2 type parameters to the Schema data type:
+{-| You'll define a `Schema` for each available resource of your PostgREST server. There are 2 type parameters to a `Schema`:
 
-1.  `id`: phantom type tag used to prevent invalid requests when performing embedding
+  - `id`: type tag which uniquely identifies _this_ `Schema`
 
-> The `id` type parameter is optional, however, **strongly encouraged**. If not specified, the Elm compiler is unable to let you know when you're trying to make an invalid embed.
+    > The `id` type parameter is optional, however, **strongly encouraged**. If not specified, the Elm compiler is unable to let you know when you're trying to make an invalid embed. Additionally, the type of `id` can be _anything_, however in practice the type will always be an empty custom type which you define to uniquely identify _this_ `Schema`.
 
-1.  `attributes`: record of the available `Attribute` to select and `Relationship` to embed
+  - `attributes`: record of the available `Attribute` to select and `Relationship` to embed
 
-> Technically speaking, the type of `attributes` can be **anything**, however, in practice the type will always be a record of `Attribute` and `Relationship`.
+    > Once again, technically speaking, the type of `attributes` can be _anything_, however in practice the type will always be a record of `Attribute` and `Relationship`.
 
 -}
 type Schema id attributes
@@ -188,22 +192,35 @@ type Attribute a
 -- https://wiki.haskell.org/Phantom_type
 
 
-{-| -}
+{-| Represents an embed path between 2 `Schema`. There are 2 type parameters to a `Relationship`:
+
+  - `cardinality`: type tag which represents the _kind_ of `Relationship` you're modeling
+
+    > The `cardinality` is automatically determinded by the functions which return a `Relationship` (ie. hasMany, hasOne, hasNullable), so don't worry about constructing values for this type!
+
+  - `id`: type tag which uniquely identifies the _other_ `Schema` that this `Schema` is related to
+
+    > Just like the `id` of a `Schema`, the `id` of a `Relationship` is optional, however, **strongly encouraged**. If not specified, the Elm compiler is unable to let you know when you're trying to make an invalid embed.
+
+-}
 type Relationship cardinality id
     = Relationship String
 
 
-{-| -}
+{-| Model a "has many" relationship
+-}
 type HasMany
     = HasMany HasMany
 
 
-{-| -}
+{-| Model a "has one" relationship
+-}
 type HasOne
     = HasOne HasOne
 
 
-{-| -}
+{-| Model a "has one nullable" relationship
+-}
 type HasNullable
     = HasNullable HasNullable
 
@@ -420,10 +437,8 @@ type alias Orders =
 {-| Let's take a look at the definition of `Schema.school` originally referenced in the example found in the README of this package.
 
     -- Schema.elm
-
     type School
         = School School
-
 
     school :
         Schema School
@@ -436,8 +451,9 @@ type alias Orders =
             { id = string "unitid"
             , name = string "instnm"
             , state = string "stabbr"
-            , -- TODO: add Relationship here that we can backref later
             }
+
+If you think about it, a `Schema` is nothing more than an opaque wrapper around _any_ 2 types. This is important to note because it means that it's incredibly easy to define your `Schema` incorrectly! Luckily, once your `Schema` is correct, your requests will pretty much always be valid.
 
 -}
 schema : String -> attributes -> Schema id attributes
@@ -540,19 +556,26 @@ nullable (Attribute { name, decoder, encoder, toString }) =
         }
 
 
-{-| -}
+{-| **Important Note:** `String` parameter is the name of the foreign key
+-}
 hasOne : String -> Relationship HasOne id
 hasOne =
     Relationship
 
 
-{-| -}
+{-| **Important Note:** `String` parameter depends on data model:
+
+  - Many to Many: name of through table
+  - One to Many: name of foreign key
+
+-}
 hasMany : String -> Relationship HasMany id
 hasMany =
     Relationship
 
 
-{-| -}
+{-| **Important Note:** `String` parameter is the name of the foreign key
+-}
 hasNullable : String -> Relationship HasNullable id
 hasNullable =
     Relationship
@@ -855,8 +878,7 @@ embedMany getRelationship (Schema schemaName attributes2) options =
             }
 
 
-{-| Simple [pattern matching](https://www.postgresql.org/docs/9.5/static/functions-matching.html#FUNCTIONS-LIKE)
-TODO: link to latest docs
+{-| Simple pattern matching
 -}
 like : String -> (attributes -> Attribute String) -> Condition attributes
 like =
