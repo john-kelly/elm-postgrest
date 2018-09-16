@@ -82,5 +82,5 @@ Pretty cool.
 
 *   [Official Documentation](http://package.elm-lang.org/packages/john-kelly/elm-postgrest/latest)
 *   [Simple Examples: elm-postgrest/examples](https://github.com/john-kelly/elm-postgrest/tree/master/examples)
-*   [Complex Example: elm-postgrest-spa-example](https://github.com/john-kelly/elm-postgrest-spa-example)
+*   [Complex Example: elm-postgrest-spa-example](https://github.com/john-kelly/elm-postgrest-spa-example) (out of date)
 *   [Blog Posts](https://foldp.com)
