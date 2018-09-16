@@ -3,7 +3,7 @@ module ReadMeExample exposing (main)
 import Browser
 import Html exposing (Html, div, text)
 import Http
-import PostgRest as Rest
+import PostgRest as Rest exposing (Attribute, Request, Selection)
 import Schema
 
 
@@ -13,7 +13,7 @@ type alias School =
     }
 
 
-request : Rest.Request (List School)
+request : Request (List School)
 request =
     Rest.readMany Schema.school
         { select = selection
@@ -24,7 +24,7 @@ request =
         }
 
 
-selection : Rest.Selection { a | id : Rest.Attribute String, name : Rest.Attribute String } School
+selection : Selection { a | id : Attribute String, name : Attribute String } School
 selection =
     Rest.map2 School
         (Rest.field .id)
