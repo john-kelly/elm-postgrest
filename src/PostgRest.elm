@@ -53,7 +53,7 @@ Before you can do anything interesting (ex. fetching resources), you must first 
 
 ## Attributes
 
-A `Schema` is made up of `Attribute`s. An `Attribute` represents a single field of an exposed resource.
+A Schema is made up of Attributes. An `Attribute` represents a single field of an exposed resource.
 
 @docs Attribute, string, int, float, bool, nullable
 
@@ -65,14 +65,14 @@ A `Schema` is made up of `Attribute`s. An `Attribute` represents a single field 
 
 ## Relationships
 
-The way in which we model a `Relationship` is one of the big ideas of this package. How do we represent what are often mutually recursive types? Well, we separate the resource from the schema!
+In addition to Attributes, a Schema is made up of Relationships. The way Relationships are modeled is one of the big ideas of this package.
 
 @docs Relationship, HasOne, hasOne, HasMany, hasMany, HasNullable, hasNullable
 
 
 # Build a Request
 
-PostgREST supports all of the CRUD (Create, Read, Update, Delete) operations that you know and love! In our quest to understand, we'll start with the reads!
+PostgREST supports all of the CRUD (Create, Read, Update, Delete) operations that you know and love! Let's start with the reads.
 
 @docs Request
 
@@ -166,11 +166,13 @@ import Url.Builder as Builder exposing (QueryParameter)
 
   - `id`: type tag which uniquely identifies _this_ `Schema`
 
-> The `id` type parameter is optional, however, **strongly encouraged**. If not specified, the Elm compiler is unable to let you know when you're trying to make an invalid embed. Additionally, the type of `id` can be _anything_, however in practice the type will always be an empty custom type which you define to uniquely identify _this_ `Schema`.
+> The `id` type parameter is optional, however, **strongly encouraged**. If not specified, the Elm compiler is unable to let you know when you're trying to make an invalid embed.
+
+> Additionally, you should note that the type of `id` can be _anything_, however, in practice the type will always be an empty custom type which _you define_. More on this later.
 
   - `attributes`: record of the available `Attribute` to select and `Relationship` to embed
 
-> Once again, technically speaking, the type of `attributes` can be _anything_, however in practice the type will always be a record of `Attribute` and `Relationship`.
+> Once again, you should note that the type of `attributes` can be _anything_, however, in practice the type will always be a record of `Attribute` and `Relationship`.
 
 -}
 type Schema id attributes
