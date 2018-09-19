@@ -6,9 +6,9 @@ This package creates a pleasant experience for interacting with PostgREST in Elm
 
 The design of the package is based on 2 central ideas:
 
-1.  **The PostgREST specification is not important to application authors.** More generally, the Transfer Protocol (HTTP) and the Interchange Format (JSON) are often inessential details of the data request layer of your application. Therefore, where applicable, requests are thought of at the level of "REST requests built from a schema" rather than "HTTP requests transfering JSON data".
+1.  **The PostgREST spec is not important to application authors.** More generally, Transfer Protocols (HTTP) and Interchange Formats (JSON) are implementation details of an application. That's why in elm-postgrest, requests are thought of as "REST requests built from a schema" rather than "HTTP requests transfering JSON data".
 
-2.  **Invalid PostgREST requests are equivalent to runtime errors.** And, because this is Elm, you should not be able to generate runtime errors! Therefore, where feasible, invalid requests generate compiler errors rather than HTTP errors.
+2.  **Invalid PostgREST requests should be compiler errors.** HTTP errors caused by improperly constructed HTTP requests are, in many ways, equivalent to runtime errors. And, because this is Elm, you should not be able to generate runtime errors! That's why in elm-postgrest, where feasible, invalid requests are compiler errors.
 
 ## Example
 
@@ -72,9 +72,7 @@ selection =
 As demonstrated above, this package leads to a more pleasant experience for interacting with PostgREST in Elm. With elm-postgrest, the request code:
 
 1.  contains only the essential details of the data request
-2.  is no longer prone to invalid construction (because the strings are gone).
-
-Pretty cool.
+2.  is no longer prone to invalid construction (because the strings are gone)
 
 > As an aside, you may have noticed that the above example does not provide a definition for `Schema.school`. Dig into the [docs](http://package.elm-lang.org/packages/john-kelly/elm-postgrest/latest/PostgRest) to learn more!
 
