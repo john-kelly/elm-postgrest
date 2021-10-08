@@ -1,3 +1,7 @@
+# NOT ACTIVELY MAINTAINED - FORK IF YOU WANT TO USE
+
+If you have any questions or want to chat about the package, I'm always interested! I just don't have the time (or reason) to actively maintain this right now.
+
 # PostgREST in Elm
 
 This package creates a pleasant experience for interacting with PostgREST in Elm.
